@@ -1,0 +1,185 @@
+{
+  "campaign_name": "banknifty_options_paper_50000_2026-06-08",
+  "strategy_version": "banknifty_options_constituent_led_v2",
+  "underlying": "BANKNIFTY",
+  "underlying_symbol": "NSE:NIFTYBANK-INDEX",
+  "starting_capital": 50000,
+  "max_premium_exposure": 40000,
+  "max_daily_loss": 5000,
+  "max_open_positions": 1,
+  "max_trades_per_day": 3,
+  "max_trade_loss": 1500,
+  "stop_loss_pct": 0.3,
+  "target_pct": 0.5,
+  "profit_lock_trigger": 1000,
+  "profit_lock_step": 500,
+  "option_tick_size": 0.05,
+  "strike_step": 100,
+  "signal_threshold_pct": 0.1,
+  "no_new_trades_after": "14:45",
+  "force_exit_time": "15:20",
+  "entry_scan_interval_minutes": 5,
+  "open_position_update_interval_minutes": 5,
+  "poll_interval_seconds": 15,
+  "quote_stale_seconds": 90,
+  "paper_only": true,
+  "live_orders_enabled": false,
+  "notes": "BankNifty options paper campaign. Long CE/PE only, intraday only, no option selling, no live FYERS orders. Entry is constituent-led with BankNifty index confirmation; 5m entry scan and 15s post-entry deterministic monitor. Weights are equal until official index weights are ingested.",
+  "min_index_confirmation_pct": 0.05,
+  "min_constituent_coverage_pct": 70,
+  "min_directional_weight_pct": 60,
+  "risk_filter": {
+    "enabled": true,
+    "enforce_spread_filter": true,
+    "max_spread_pct": 3.0,
+    "max_spread_rupees": 5.0,
+    "min_volume": 0,
+    "require_greeks": false,
+    "min_abs_delta": 0,
+    "max_abs_theta": 0,
+    "max_iv": 0,
+    "require_iv": false,
+    "notes": "Deterministic pre-entry option guardrail. Spread filter active. Greeks/IV caps stay disabled (min_abs_delta/max_abs_theta/max_iv = 0, require_greeks/require_iv false) until a greeks/IV data source is ingested. Paper-only; no live orders."
+  },
+  "constituent_weight_mode": "equal_until_official_weights_available",
+  "constituents": [
+    {
+      "symbol": "AUBANK",
+      "fyers_symbol": "NSE:AUBANK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "AXISBANK",
+      "fyers_symbol": "NSE:AXISBANK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "BANKBARODA",
+      "fyers_symbol": "NSE:BANKBARODA-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "CANBK",
+      "fyers_symbol": "NSE:CANBK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "FEDERALBNK",
+      "fyers_symbol": "NSE:FEDERALBNK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "HDFCBANK",
+      "fyers_symbol": "NSE:HDFCBANK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "ICICIBANK",
+      "fyers_symbol": "NSE:ICICIBANK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "IDFCFIRSTB",
+      "fyers_symbol": "NSE:IDFCFIRSTB-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "INDUSINDBK",
+      "fyers_symbol": "NSE:INDUSINDBK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "KOTAKBANK",
+      "fyers_symbol": "NSE:KOTAKBANK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "PNB",
+      "fyers_symbol": "NSE:PNB-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "SBIN",
+      "fyers_symbol": "NSE:SBIN-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "UNIONBANK",
+      "fyers_symbol": "NSE:UNIONBANK-EQ",
+      "weight": null
+    },
+    {
+      "symbol": "YESBANK",
+      "fyers_symbol": "NSE:YESBANK-EQ",
+      "weight": null
+    }
+  ],
+  "strategy_router": [
+    {
+      "id": "banknifty_constituent_led_directional_long_options",
+      "name": "BankNifty Constituent-Led Directional Long Options",
+      "enabled": true,
+      "paper_trade_enabled": true,
+      "entry_function": "constituent_led_long_options",
+      "status": "paper_ready",
+      "source": "Trading Vault/03 Strategy Ideas/BankNifty Constituent-Led Directional Long Options.md",
+      "notes": "Only active paper entry strategy. Long CE/PE only; no live orders.",
+      "card_type": "entry"
+    },
+    {
+      "id": "banknifty_official_payoff_structure_selector",
+      "name": "BankNifty Official Payoff Structure Selector",
+      "enabled": false,
+      "paper_trade_enabled": false,
+      "entry_function": "not_implemented",
+      "status": "research_only",
+      "source": "Trading Vault/03 Strategy Ideas/BankNifty Official Payoff Structure Selector.md",
+      "notes": "Payoff routing not implemented; short-premium structures remain blocked.",
+      "card_type": "entry"
+    },
+    {
+      "id": "options_360_short_straddle_strangle_premium_decay",
+      "name": "Options 360 Short Straddle/Strangle Premium Decay",
+      "enabled": false,
+      "paper_trade_enabled": false,
+      "entry_function": "research_only",
+      "status": "research_only_blocked",
+      "source": "Trading Vault/03 Strategy Ideas/Options 360 Short Straddle Strangle Premium Decay.md",
+      "notes": "Undefined-risk option selling is blocked until margin, gap, adjustment, and slippage are modeled.",
+      "card_type": "entry"
+    },
+    {
+      "id": "options_greeks_risk_filter",
+      "name": "Options Greeks Risk Filter for Index Options",
+      "enabled": false,
+      "paper_trade_enabled": false,
+      "entry_function": "options_greeks_risk_filter",
+      "status": "filter_active",
+      "card_type": "filter",
+      "source": "Trading Vault/03 Strategy Ideas/Options Greeks Risk Filter for Index Options.md",
+      "notes": "Guardrail filter applied pre-entry via risk_filter config; never a runnable entry strategy."
+    },
+    {
+      "id": "implied_volatility_regime_filter",
+      "name": "Implied Volatility Regime Filter for Long Options",
+      "enabled": false,
+      "paper_trade_enabled": false,
+      "entry_function": "implied_volatility_regime_filter",
+      "status": "filter_active",
+      "card_type": "filter",
+      "source": "Trading Vault/03 Strategy Ideas/Implied Volatility Regime Filter for Long Options.md",
+      "notes": "Guardrail filter applied pre-entry via risk_filter config; never a runnable entry strategy."
+    },
+    {
+      "id": "trading_psychology_execution_guardrails",
+      "name": "Trading Psychology Execution Guardrails",
+      "enabled": false,
+      "paper_trade_enabled": false,
+      "entry_function": "guardrail_partially_implemented",
+      "status": "guardrail_partial",
+      "card_type": "guardrail",
+      "source": "Trading Vault/03 Strategy Ideas/Trading Psychology Execution Guardrails.md",
+      "notes": "Daily loss, max trades, max open positions, and paper-only guardrails are enforced centrally."
+    }
+  ]
+}

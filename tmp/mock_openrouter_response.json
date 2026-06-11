@@ -1,0 +1,28 @@
+{
+  "model": "perplexity/sonar-deep-research",
+  "provider": "openrouter",
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30,
+    "cost": 0.01
+  },
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "# Mock Deep Research Answer\nThis is a mocked source-backed answer used only to verify DB storage and report writing. It is not market research.",
+        "annotations": [
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://example.com/mock-source",
+              "title": "Mock source"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

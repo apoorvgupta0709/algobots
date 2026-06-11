@@ -1,0 +1,41 @@
+# Secrets / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.secret
+*.token
+
+# Runtime PostgreSQL / local state
+pgdata/
+pgroot/
+run/
+logs/
+*.log
+*.pid
+
+# Python / uv
+.venv/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated/binary artifacts
+pkg/
+*.deb
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.zip
+
+# Hermes local state
+.hermes/

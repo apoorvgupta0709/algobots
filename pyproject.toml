@@ -1,0 +1,19 @@
+[project]
+name = "finance-db"
+version = "0.1.0"
+description = "Local PostgreSQL finance tracker with FYERS v3 market-data ingestion"
+requires-python = ">=3.11"
+dependencies = [
+  "fyers-apiv3>=3.1.7",
+  "psycopg[binary]>=3.2.0",
+  "python-dotenv>=1.0.0",
+  "streamlit>=1.35,<2",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[tool.uv]
+package = false

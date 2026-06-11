@@ -1,0 +1,148 @@
+## Morning Stock Recommendations
+Generated: 2026-06-11 05:30 UTC
+Scope: research-only buy candidates for review after 11:00 IST. Not investment advice. No orders placed.
+Phase: 1 — advisory/reporting only; live execution disabled.
+
+## Ranked candidates
+- 1. NSE:ADANIENT-EQ
+  - Label: needs_review
+  - Score: 72.00/100 | Technical 60.00/60 | Risk 12.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹2940.60 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹2,918.10; 2R target reference: ₹2,985.60
+  - Local facts: LTP ₹2,940.60; change ₹9.50 (0.32%); trend bullish; RSI 75.4833; RelVol 1.985
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - MACD histogram positive
+    - Positive ROC20: 21.26%
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Momentum may be extended: RSI 75.4833
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 2. NSE:GMRAIRPORT-EQ
+  - Label: needs_review
+  - Score: 72.00/100 | Technical 60.00/60 | Risk 12.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹99.28 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹97.26; 2R target reference: ₹103.32
+  - Local facts: LTP ₹99.28; change ₹-1.64 (-1.63%); trend bullish; RSI 63.7346; RelVol 0.6227
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - RSI in constructive range: 63.7346
+    - MACD histogram positive
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 3. NSE:NMDC-EQ
+  - Label: needs_review
+  - Score: 72.00/100 | Technical 60.00/60 | Risk 12.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹88.36 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹94.34; 2R target reference: n/a
+  - Local facts: LTP ₹88.36; change ₹-0.09 (-0.10%); trend bullish; RSI 51.4851; RelVol 0.6691
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - RSI in constructive range: 51.4851
+    - MACD histogram positive
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Stop reference is not below LTP; setup needs manual review before any buy-candidate label
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 4. NSE:COALINDIA-EQ
+  - Label: needs_review
+  - Score: 68.00/100 | Technical 60.00/60 | Risk 8.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹447.65 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹472.85; 2R target reference: n/a
+  - Local facts: LTP ₹447.65; change ₹-3.35 (-0.74%); trend bullish; RSI 58.737; RelVol 0.4134
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - RSI in constructive range: 58.737
+    - MACD histogram positive
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Low participation: RelVol20 0.4134
+    - Stop reference is not below LTP; setup needs manual review before any buy-candidate label
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 5. NSE:CUMMINSIND-EQ
+  - Label: needs_review
+  - Score: 68.00/100 | Technical 60.00/60 | Risk 8.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹5682.00 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹5,662.50; 2R target reference: ₹5,721.00
+  - Local facts: LTP ₹5,682.00; change ₹72.50 (1.29%); trend bullish; RSI 63.4114; RelVol 0.3441
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - RSI in constructive range: 63.4114
+    - MACD histogram positive
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Low participation: RelVol20 0.3441
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 6. NSE:GAIL-EQ
+  - Label: needs_review
+  - Score: 68.00/100 | Technical 60.00/60 | Risk 8.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹165.25 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹161.54; 2R target reference: ₹172.67
+  - Local facts: LTP ₹165.25; change ₹-2.76 (-1.64%); trend bullish; RSI 59.6244; RelVol 0.3048
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - RSI in constructive range: 59.6244
+    - MACD histogram positive
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Low participation: RelVol20 0.3048
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 7. NSE:INDUSTOWER-EQ
+  - Label: needs_review
+  - Score: 68.00/100 | Technical 60.00/60 | Risk 8.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹415.10 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹425.10; 2R target reference: n/a
+  - Local facts: LTP ₹415.10; change ₹1.95 (0.47%); trend bullish; RSI 51.0783; RelVol 0.3895
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - RSI in constructive range: 51.0783
+    - MACD histogram positive
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Low participation: RelVol20 0.3895
+    - Stop reference is not below LTP; setup needs manual review before any buy-candidate label
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+- 8. NSE:ADANIENSOL-EQ
+  - Label: needs_review
+  - Score: 67.00/100 | Technical 55.00/60 | Risk 12.00/20 | Fundamental/Sentiment context via Sonar
+  - Entry condition: Only consider if price holds above ₹1515.20 after 11:00 IST and setup remains valid; no automatic order.
+  - Stop reference: ₹1,482.90; 2R target reference: ₹1,579.80
+  - Local facts: LTP ₹1,515.20; change ₹-20.40 (-1.33%); trend bullish; RSI 80.7518; RelVol 0.759
+  - Technical reasons:
+    - Bullish daily trend: close above key moving averages
+    - Close above SMA20
+    - Close above SMA50
+    - Close above SMA200
+    - MACD histogram positive
+    - Positive ROC20: 13.56%
+  - Risks / review flags:
+    - Stale/missing data review: Data freshness: factor snapshot is 6d old
+    - Momentum may be extended: RSI 80.7518
+  - Fundamental/sentiment: not refreshed in this run; use cached/live Sonar research before high-conviction decisions.
+
+## Safety / execution status
+- No orders placed, modified, or cancelled.
+- These are buy-candidate research signals, not automatic trade instructions.
+- Phase 2 algobot must remain paper-first until risk rules and explicit live-order approvals are implemented.

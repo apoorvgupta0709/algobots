@@ -1,0 +1,20 @@
+{
+  "strategy_version": "paper_algobot_v1",
+  "capital": 5000,
+  "max_risk_per_trade": 50,
+  "max_weekly_loss": 150,
+  "max_open_positions": 2,
+  "max_position_value": 2500,
+  "eligible_labels": ["buy_candidate_research"],
+  "allow_paper_setup": false,
+  "paper_only": true,
+  "live_orders_enabled": false,
+  "entry_policy": "open_if_ltp_at_or_above_entry_trigger_else_pending",
+  "exit_policy": "close_on_ltp_touching_stop_target_trailing_or_time_stop",
+  "pending_entry_expiry_days": 2,
+  "max_holding_days": 3,
+  "trailing_stop_enabled": true,
+  "trail_activation_r": 1,
+  "trail_distance_r": 1,
+  "notes": "Phase 2A paper algobot only. No FYERS order placement, modification, or cancellation."
+}

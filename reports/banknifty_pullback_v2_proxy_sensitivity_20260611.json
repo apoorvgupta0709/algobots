@@ -1,0 +1,110 @@
+[
+  {
+    "parameter": "min_directional_weight_pct",
+    "variant": "minus20",
+    "value": "48.0",
+    "trades": 122,
+    "expectancy_r": "1.16",
+    "mfe_capture_pct": "47.83",
+    "max_drawdown": "-3051.62"
+  },
+  {
+    "parameter": "min_directional_weight_pct",
+    "variant": "plus20",
+    "value": "72.0",
+    "trades": 99,
+    "expectancy_r": "1.15",
+    "mfe_capture_pct": "49.01",
+    "max_drawdown": "-4782.62"
+  },
+  {
+    "parameter": "min_index_confirmation_pct",
+    "variant": "minus20",
+    "value": "0.040",
+    "trades": 115,
+    "expectancy_r": "1.22",
+    "mfe_capture_pct": "48.87",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "min_index_confirmation_pct",
+    "variant": "plus20",
+    "value": "0.060",
+    "trades": 115,
+    "expectancy_r": "1.22",
+    "mfe_capture_pct": "48.87",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "weighted_vwap_side_pct",
+    "variant": "minus20",
+    "value": "48.0",
+    "trades": 117,
+    "expectancy_r": "1.21",
+    "mfe_capture_pct": "48.97",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "weighted_vwap_side_pct",
+    "variant": "plus20",
+    "value": "72.0",
+    "trades": 113,
+    "expectancy_r": "1.21",
+    "mfe_capture_pct": "49.24",
+    "max_drawdown": "-4782.62"
+  },
+  {
+    "parameter": "lunch_min_relvol",
+    "variant": "minus20",
+    "value": "1.04",
+    "trades": 117,
+    "expectancy_r": "1.10",
+    "mfe_capture_pct": "48.65",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "lunch_min_relvol",
+    "variant": "plus20",
+    "value": "1.56",
+    "trades": 112,
+    "expectancy_r": "1.23",
+    "mfe_capture_pct": "48.82",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "lunch_min_day_range_vs_adr10",
+    "variant": "minus20",
+    "value": "0.48",
+    "trades": 115,
+    "expectancy_r": "1.23",
+    "mfe_capture_pct": "49.49",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "lunch_min_day_range_vs_adr10",
+    "variant": "plus20",
+    "value": "0.72",
+    "trades": 110,
+    "expectancy_r": "1.18",
+    "mfe_capture_pct": "47.56",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "ratchet_giveback_pct",
+    "variant": "minus20",
+    "value": "28.0",
+    "trades": 115,
+    "expectancy_r": "1.28",
+    "mfe_capture_pct": "50.82",
+    "max_drawdown": "-5543.57"
+  },
+  {
+    "parameter": "ratchet_giveback_pct",
+    "variant": "plus20",
+    "value": "42.0",
+    "trades": 115,
+    "expectancy_r": "1.14",
+    "mfe_capture_pct": "45.71",
+    "max_drawdown": "-5543.57"
+  }
+]

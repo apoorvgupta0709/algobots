@@ -1,0 +1,65 @@
+{
+  "paper_only": true,
+  "live_orders_enabled": false,
+  "force_exit_time": "15:20",
+  "no_new_entries_before": "09:30",
+  "global_max_open_positions": 5,
+  "notes": "Paper-only NSE intraday options strategy pack. No live orders.",
+  "strategies": {
+    "nifty_orb_debit_spread": {
+      "name": "Nifty ORB Debit Spread",
+      "enabled": true,
+      "paper_trade_enabled": true,
+      "paper_capital": "50000",
+      "max_trade_loss": "1500",
+      "max_daily_loss": "5000",
+      "max_premium_exposure": "40000",
+      "max_trades_per_day": 3,
+      "max_open_positions": 1
+    },
+    "cpr_trend_debit_spread": {
+      "name": "CPR Trend-Day Debit Spread",
+      "enabled": true,
+      "paper_trade_enabled": true,
+      "paper_capital": "50000",
+      "max_trade_loss": "1500",
+      "max_daily_loss": "5000",
+      "max_premium_exposure": "40000",
+      "max_trades_per_day": 3,
+      "max_open_positions": 1
+    },
+    "expiry_tuesday_directional": {
+      "name": "Expiry Tuesday Nifty Defined-Risk Directional",
+      "enabled": true,
+      "paper_trade_enabled": true,
+      "paper_capital": "50000",
+      "max_trade_loss": "1500",
+      "max_daily_loss": "5000",
+      "max_premium_exposure": "40000",
+      "max_trades_per_day": 3,
+      "max_open_positions": 1
+    },
+    "nifty_vwap_mean_reversion": {
+      "name": "Nifty VWAP Mean Reversion Long",
+      "enabled": true,
+      "paper_trade_enabled": true,
+      "paper_capital": "50000",
+      "max_trade_loss": "1500",
+      "max_daily_loss": "5000",
+      "max_premium_exposure": "40000",
+      "max_trades_per_day": 3,
+      "max_open_positions": 1
+    },
+    "single_stock_momentum_index_confirm": {
+      "name": "Single-Stock Momentum with Index Confirmation",
+      "enabled": true,
+      "paper_trade_enabled": true,
+      "paper_capital": "50000",
+      "max_trade_loss": "1500",
+      "max_daily_loss": "5000",
+      "max_premium_exposure": "40000",
+      "max_trades_per_day": 3,
+      "max_open_positions": 1
+    }
+  }
+}
