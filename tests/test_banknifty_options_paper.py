@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import json
 import sys
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -271,14 +273,17 @@ def test_evaluate_option_exit_closes_on_profit_lock_stop() -> None:
         profit_lock_trigger=Decimal("1000"),
         profit_lock_step=Decimal("500"),
         tick_size=Decimal("0.05"),
-    ) == ("profit_lock_stop", Decimal("1337.95"), Decimal("3000.00"))
+        # LTP collapsed past the raised stop between polls; the fill is the
+        # observable LTP, not the stop level the market never traded at.
+    ) == ("profit_lock_stop", Decimal("1119.20"), Decimal("-3562.50"))
 
 
 def test_evaluate_option_exit_closes_on_stop_target_and_intraday_force_exit() -> None:
     now = datetime(2026, 6, 8, 9, 50, tzinfo=timezone.utc)
     entry_time = now - timedelta(minutes=10)
 
-    assert evaluate_option_exit(Decimal("69"), Decimal("100"), Decimal("70"), Decimal("150"), 30, now=now, entry_time=entry_time, force_exit_utc=None) == ("stop_loss", Decimal("70"), Decimal("-900.00"))
+    # A gap below the stop fills at the LTP (69), not the untraded stop level (70).
+    assert evaluate_option_exit(Decimal("69"), Decimal("100"), Decimal("70"), Decimal("150"), 30, now=now, entry_time=entry_time, force_exit_utc=None) == ("stop_loss", Decimal("69"), Decimal("-930.00"))
     assert evaluate_option_exit(Decimal("151"), Decimal("100"), Decimal("70"), Decimal("150"), 30, now=now, entry_time=entry_time, force_exit_utc=None) == ("target", Decimal("150"), Decimal("1500.00"))
     assert evaluate_option_exit(Decimal("110"), Decimal("100"), Decimal("70"), Decimal("150"), 30, now=now, entry_time=entry_time, force_exit_utc=now - timedelta(seconds=1)) == ("force_intraday_exit", Decimal("110"), Decimal("300.00"))
 
@@ -503,6 +508,50 @@ def test_strategy_router_parses_only_enabled_paper_safe_entry_cards() -> None:
     runnable = bn.runnable_entry_strategy_cards(cards)
 
     assert [card.strategy_id for card in runnable] == ["banknifty_constituent_led_directional_long_options"]
+
+
+def test_load_config_refuses_nested_risk_block_that_disagrees_with_top_level(tmp_path: Path) -> None:
+    config_path = tmp_path / "banknifty_options_paper.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "campaign_name": "risk_drift_test",
+                "paper_only": True,
+                "live_orders_enabled": False,
+                "max_trade_loss": 1500,
+                "max_daily_loss": 5000,
+                "max_trades_per_day": 3,
+                "risk": {"max_trade_loss_inr": 999},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit):
+        bn.load_config(config_path)
+
+
+def test_load_config_accepts_nested_risk_block_matching_top_level(tmp_path: Path) -> None:
+    config_path = tmp_path / "banknifty_options_paper.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "campaign_name": "risk_match_test",
+                "paper_only": True,
+                "live_orders_enabled": False,
+                "max_trade_loss": 1500,
+                "max_daily_loss": 5000,
+                "max_trades_per_day": 3,
+                "max_open_positions": 1,
+                "max_premium_exposure": 40000,
+                "risk": {"max_trade_loss_inr": 1500, "max_daily_loss_inr": 5000, "max_trades_per_day": 3, "max_open_positions": 1, "max_premium_exposure_inr": 40000},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = bn.load_config(config_path)
+    assert config.max_trade_loss == Decimal("1500")
 
 
 def test_load_config_attaches_strategy_router_from_json(tmp_path: Path) -> None:

@@ -135,11 +135,18 @@ def evaluate_gate(
     return GateDecision(True, "ready_for_manual_live_execution", ())
 
 
+def strict_bool(value: Any, *, key: str) -> bool:
+    """Safety flags must be literal JSON booleans — bool("false") is True."""
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f"{key} must be a JSON boolean true/false, got {value!r}")
+
+
 def load_config(path: Path) -> GateConfig:
     data = json.loads(path.read_text(encoding="utf-8"))
     return GateConfig(
-        live_orders_enabled=bool(data.get("live_orders_enabled", False)),
-        kill_switch_enabled=bool(data.get("kill_switch_enabled", True)),
+        live_orders_enabled=strict_bool(data.get("live_orders_enabled", False), key="live_orders_enabled"),
+        kill_switch_enabled=strict_bool(data.get("kill_switch_enabled", True), key="kill_switch_enabled"),
         max_capital=Decimal(str(data.get("max_capital", 5000))),
         max_risk_per_trade=Decimal(str(data.get("max_risk_per_trade", 50))),
         max_daily_loss=Decimal(str(data.get("max_daily_loss", 100))),
@@ -197,7 +204,13 @@ def draft_from_idea_row(row: tuple[Any, ...]) -> TradeIdeaDraft:
         stop_loss=Decimal(str(row[9])) if row[9] is not None else None,
         target_price=Decimal(str(row[10])) if row[10] is not None else None,
         rationale=str(row[11]),
-        max_loss_amount=Decimal(str((row[12] or {}).get("max_loss_amount", 0))),
+        # Missing risk must stay None so evaluate_gate blocks it; defaulting to 0
+        # would sail through the max_risk_per_trade check.
+        max_loss_amount=(
+            Decimal(str((row[12] or {}).get("max_loss_amount")))
+            if (row[12] or {}).get("max_loss_amount") is not None
+            else None
+        ),
     )
 
 

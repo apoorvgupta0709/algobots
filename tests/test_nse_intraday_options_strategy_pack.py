@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
+import json
 import sys
 
 import pytest
@@ -15,11 +16,13 @@ from scripts.nse_intraday_options_strategy_pack import (
     StrategyPackConfig,
     build_default_config,
     check_debit_spread_risk,
+    config_to_json_dict,
     evaluate_cpr_trend_debit_spread,
     evaluate_expiry_tuesday_directional,
     evaluate_nifty_orb_debit_spread,
     evaluate_nifty_vwap_mean_reversion,
     evaluate_single_stock_momentum,
+    load_config,
     next_tuesday_expiry,
     strict_bool,
 )
@@ -105,7 +108,11 @@ def test_cpr_trend_debit_spread_requires_narrow_cpr_and_prevday_break():
         c("15:15", "100", "100.3", "99.7", "100", 1000),
     ]
     today = [
-        c("09:15", "100", "100.4", "99.9", "100.25", 1000),
+        # Bias needs the full first 15 minutes (three 5m candles); the 09:25
+        # candle's close is the first-15-minute close.
+        c("09:15", "100", "100.4", "99.9", "100.2", 1000),
+        c("09:20", "100.2", "100.35", "100.05", "100.22", 900),
+        c("09:25", "100.22", "100.4", "100.1", "100.25", 950),
         c("09:45", "100.3", "101.2", "100.2", "100.8", 1800),
     ]
 
@@ -202,3 +209,123 @@ def test_single_stock_momentum_requires_stock_breakout_index_confirmation_and_rs
 def test_next_tuesday_expiry_returns_same_day_for_tuesday_else_next_tuesday():
     assert next_tuesday_expiry(date(2026, 6, 9)) == date(2026, 6, 9)
     assert next_tuesday_expiry(date(2026, 6, 10)) == date(2026, 6, 16)
+
+
+def test_orb_skips_formation_whipsaw_that_breached_both_sides_before_0945():
+    rows = [
+        c("09:15", "10000", "10020", "9980", "10000", 1000),
+        c("09:20", "10000", "10025", "9985", "10010", 1000),
+        c("09:25", "10010", "10030", "9990", "10020", 1000),
+        c("09:30", "10020", "10045", "10000", "10030", 1000),  # above the 09:15-09:25 high
+        c("09:35", "10030", "10035", "9960", "9990", 1000),  # below the 09:15-09:25 low
+        c("09:45", "10030", "10090", "10030", "10070", 2200),  # would otherwise confirm long
+    ]
+
+    assert evaluate_nifty_orb_debit_spread(rows, vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65) is None
+
+
+def test_orb_skips_post_or_whipsaw_before_the_signal_candle():
+    rows = [
+        c("09:15", "10000", "10020", "9980", "10000", 1000),
+        c("09:20", "10000", "10030", "9985", "10010", 1000),
+        c("09:25", "10010", "10040", "9990", "10020", 1000),
+        c("09:30", "10020", "10040", "10000", "10030", 1000),
+        c("09:35", "10030", "10040", "10010", "10030", 1000),
+        c("09:40", "10030", "10040", "10010", "10030", 1000),
+        c("09:45", "10030", "10055", "10010", "10035", 800),  # pokes above OR high, closes back inside
+        c("09:50", "10035", "10040", "9970", "10000", 900),  # pokes below OR low, closes back inside
+        c("09:55", "10000", "10090", "10000", "10070", 2500),  # would otherwise confirm long
+    ]
+
+    assert evaluate_nifty_orb_debit_spread(rows, vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65) is None
+
+
+def test_single_stock_short_requires_relative_weakness_not_strength():
+    stock_rows = make_orb_breakout_day("short")
+    index_rows = make_orb_breakout_day("short")
+    common = dict(
+        stock_symbol="HDFCBANK",
+        confirming_index="BANKNIFTY",
+        vix=Decimal("16"),
+        option_spread_pct=Decimal("0.003"),
+        net_debit_per_share=Decimal("2.50"),
+        lot_size=550,
+        earnings_today=False,
+    )
+
+    # Stock holding up better than the falling index must not short.
+    outperforming = evaluate_single_stock_momentum(
+        stock_rows, index_rows, **common, stock_intraday_pct=Decimal("-0.10"), index_intraday_pct=Decimal("-0.40")
+    )
+    assert outperforming is None
+
+    # Stock underperforming the index by >= 0.2% may short.
+    underperforming = evaluate_single_stock_momentum(
+        stock_rows, index_rows, **common, stock_intraday_pct=Decimal("-0.80"), index_intraday_pct=Decimal("-0.40")
+    )
+    assert underperforming is not None
+    assert underperforming.direction == "short"
+
+
+def test_load_config_rejects_string_booleans_for_strategy_flags(tmp_path: Path):
+    data = config_to_json_dict(build_default_config())
+    data["strategies"]["nifty_orb_debit_spread"]["paper_trade_enabled"] = "false"
+    config_path = tmp_path / "pack.json"
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_config(config_path)
+
+
+def test_load_config_rejects_malformed_force_exit_time(tmp_path: Path):
+    data = config_to_json_dict(build_default_config())
+    data["force_exit_time"] = "25:99"
+    config_path = tmp_path / "pack.json"
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_config(config_path)
+
+
+def test_debit_spread_proxy_payout_is_capped_at_structural_max_value():
+    from scripts.run_nse_intraday_options_strategy_pack import simulate_proxy_trade
+
+    signal = evaluate_nifty_orb_debit_spread(
+        make_orb_breakout_day("long"), vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65
+    )
+    assert signal is not None
+    rows = make_orb_breakout_day("long") + [
+        c("09:50", "10070", "10300", "10070", "10290", 3000),  # blasts far past any +2R target
+    ]
+
+    trade = simulate_proxy_trade(
+        signal,
+        rows,
+        strategy_name="Nifty ORB Debit Spread",
+        underlying="NIFTY",
+        underlying_symbol="NSE:NIFTY50-INDEX",
+        stop_pct=Decimal("0.0025"),
+        target_r=Decimal("2"),
+        time_exit=time(13, 45),
+        cost_rupees=Decimal("120"),
+    )
+
+    assert trade is not None
+    # 50-point spread bought for 22/share over 65 lot: max value (50-22)*65 = 1820
+    # vs 1430 risk -> 1.27R structural ceiling; the +2R proxy payout is impossible.
+    assert trade.target_r == Decimal("1.27")
+    assert trade.pnl_r <= Decimal("1.27")
+
+
+def test_tick_entry_guards_block_stale_signals_and_closed_windows():
+    from scripts.run_nse_intraday_options_strategy_pack import entry_window_open, signal_is_fresh
+
+    cfg = build_default_config()
+    assert entry_window_open(datetime.combine(BASE_DAY, time(10, 0)), cfg)
+    assert not entry_window_open(datetime.combine(BASE_DAY, time(9, 25)), cfg)
+    assert not entry_window_open(datetime.combine(BASE_DAY, time(15, 20)), cfg)
+
+    now = datetime.combine(BASE_DAY, time(13, 0))
+    assert signal_is_fresh(now - timedelta(minutes=5), now)
+    assert not signal_is_fresh(now - timedelta(hours=3), now)
+    assert not signal_is_fresh(now + timedelta(minutes=5), now)

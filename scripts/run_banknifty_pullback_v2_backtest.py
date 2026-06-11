@@ -267,9 +267,15 @@ def adr10(prior_rows: list[list[Candle]]) -> Decimal | None:
     return sum(vals, Decimal("0")) / Decimal(len(vals))
 
 
-def next_minute_open(minute_rows: list[Candle], after_ts: datetime) -> Candle | None:
+def next_minute_open(minute_rows: list[Candle], at_or_after: datetime) -> Candle | None:
+    """First 1-minute candle starting at or after the given timestamp.
+
+    Callers must pass the signal candle's *close* time (start + resolution):
+    the signal uses the completed 5m candle, so filling any earlier than its
+    close is look-ahead.
+    """
     for c in minute_rows:
-        if c.ts > after_ts:
+        if c.ts >= at_or_after:
             return c
     return None
 
@@ -331,6 +337,13 @@ def simulate_trade(
             pnl = -risk_rupees
             exit_ts, exit_index, exit_reason = c.ts, index_stop, "index_structure_stop"
             break
+        # Test against the lock built from PRIOR candles only — raising the lock
+        # from this candle's high and then filling at this candle's close assumes
+        # an intrabar high-before-close ordering that favors the strategy.
+        if lock is not None and pnl <= lock:
+            pnl = lock
+            exit_ts, exit_index, exit_reason = c.ts, c.close, "mfe_ratchet_stop"
+            break
         favorable = signed * ((c.high if direction == "CE" else c.low) - entry)
         best_pnl = max(best_pnl, (favorable * beta * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP))
         # Reuse configured ratchet math by mapping rupee pnl to a fake premium path.
@@ -350,10 +363,6 @@ def simulate_trade(
         if fake_stop is not None:
             candidate_lock = ((fake_stop - fake_entry) * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
             lock = max(lock or candidate_lock, candidate_lock)
-        if lock is not None and pnl <= lock:
-            pnl = lock
-            exit_ts, exit_index, exit_reason = c.ts, c.close, "mfe_ratchet_stop"
-            break
         if c.ts - entry_candle.ts >= timedelta(minutes=config.stagnation_minutes):
             momentum_gone = c.close < reference_level if direction == "CE" else c.close > reference_level
             if pnl < risk_rupees * config.stagnation_min_r and momentum_gone:
@@ -476,7 +485,7 @@ def run_backtest(config: CampaignConfig, start: date, end: date) -> tuple[list[T
             if level_key in burned:
                 rejection_counts["burned_level"] += 1
                 continue
-            entry = next_minute_open(minute_rows, c.ts)
+            entry = next_minute_open(minute_rows, c.ts + timedelta(minutes=5))
             if entry is None:
                 continue
             trade = None
@@ -519,7 +528,7 @@ def run_backtest(config: CampaignConfig, start: date, end: date) -> tuple[list[T
     return trades, meta
 
 
-def summarize(trades: list[Trade], meta: dict[str, Any]) -> dict[str, Any]:
+def summarize(trades: list[Trade], meta: dict[str, Any], *, max_daily_loss: Decimal = Decimal("5000")) -> dict[str, Any]:
     n = len(trades)
     wins = [t for t in trades if t.pnl_rupees > 0]
     losses = [t for t in trades if t.pnl_rupees < 0]
@@ -539,9 +548,10 @@ def summarize(trades: list[Trade], meta: dict[str, Any]) -> dict[str, Any]:
         equity += by_day[d]
         peak = max(peak, equity)
         max_dd = min(max_dd, equity - peak)
-    days_hit_cap = sum(1 for v in by_day.values() if v <= Decimal("-5000"))
+    days_hit_cap = sum(1 for v in by_day.values() if v <= -max_daily_loss)
     return {
         **meta,
+        "max_daily_loss": max_daily_loss,
         "trades": n,
         "wins": len(wins),
         "losses": len(losses),
@@ -603,7 +613,7 @@ def write_outputs(trades: list[Trade], summary: dict[str, Any]) -> tuple[Path, P
         ("≥ 40 trades", summary["trades"] >= 40),
         ("Expectancy ≥ +0.15R", summary["expectancy_r"] >= Decimal("0.15")),
         ("MFE capture ≥ 55%", summary["avg_mfe_capture_pct"] >= Decimal("55")),
-        ("Max DD < 3 daily caps", summary["max_drawdown"] > Decimal("-15000")),
+        ("Max DD < 3 daily caps", summary["max_drawdown"] > Decimal("-3") * Decimal(str(summary.get("max_daily_loss", "5000")))),
     ]
     for name, ok in gates:
         lines.append(f"- {'PASS' if ok else 'FAIL'} — {name}")
@@ -628,7 +638,7 @@ def main() -> None:
     if not config.paper_only or config.live_orders_enabled:
         raise SystemExit("Refusing: config must be paper_only true and live_orders_enabled false")
     trades, meta = run_backtest(config, date.fromisoformat(args.start), date.fromisoformat(args.end))
-    summary = summarize(trades, meta)
+    summary = summarize(trades, meta, max_daily_loss=config.max_daily_loss)
     md_path, csv_path = write_outputs(trades, summary)
     print(json.dumps({k: str(v) if isinstance(v, Decimal) else v for k, v in summary.items()}, indent=2, default=str))
     print(f"Report: {md_path}")

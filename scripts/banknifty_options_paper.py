@@ -806,6 +806,23 @@ def load_config(path: Path = DEFAULT_CONFIG) -> CampaignConfig:
             f"exceeds max_daily_loss ({max_daily_loss})."
         )
 
+    # The engine reads the top-level risk keys only. Refuse to run when the
+    # documentation-style nested "risk" block disagrees, so the two can't drift.
+    nested_risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+    nested_risk_pairs = (
+        ("max_trade_loss_inr", max_trade_loss),
+        ("max_daily_loss_inr", max_daily_loss),
+        ("max_trades_per_day", Decimal(max_trades_per_day)),
+        ("max_open_positions", Decimal(str(data.get("max_open_positions", 1)))),
+        ("max_premium_exposure_inr", Decimal(str(data.get("max_premium_exposure", 1500)))),
+    )
+    for nested_key, top_value in nested_risk_pairs:
+        if nested_key in nested_risk and Decimal(str(nested_risk[nested_key])) != top_value:
+            raise SystemExit(
+                f"Refusing to run: config risk.{nested_key} ({nested_risk[nested_key]}) "
+                f"disagrees with the enforced top-level value ({top_value})."
+            )
+
     return CampaignConfig(
         campaign_name=str(data.get("campaign_name", "banknifty_options_paper_50000_2026-06-08")),
         strategy_version=str(data.get("strategy_version", "banknifty_options_paper_v1")),
@@ -1309,9 +1326,12 @@ def evaluate_option_exit(
         if profit_lock_stop is not None and profit_lock_stop > stop_premium:
             stop_premium = profit_lock_stop
     if ltp <= stop_premium:
-        pnl = (stop_premium - entry_premium) * quantity
+        # A gap through the stop fills at the observed LTP, not the stop level —
+        # paper P&L must not pretend the stop price was achievable.
+        exit_premium = min(ltp, stop_premium)
+        pnl = (exit_premium - entry_premium) * quantity
         reason = "profit_lock_stop" if stop_premium > entry_premium else "stop_loss"
-        return reason, stop_premium, pnl.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+        return reason, exit_premium, pnl.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
     if target_exit_enabled and ltp >= target_premium:
         pnl = (target_premium - entry_premium) * quantity
         return "target", target_premium, pnl.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
@@ -1342,7 +1362,8 @@ def evaluate_stale_quote_force_exit(
 
 def connect_db() -> psycopg.Connection:
     load_dotenv(PROJECT_ROOT / ".env")
-    return psycopg.connect(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
+    # Pin the session timezone so ts::date / current_date resolve in IST on any host.
+    return psycopg.connect(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL), options="-c timezone=Asia/Kolkata")
 
 
 def apply_migrations() -> None:

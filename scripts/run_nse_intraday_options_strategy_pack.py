@@ -61,6 +61,18 @@ SYMBOLS = {
 BANK_STOCKS = {"HDFCBANK", "ICICIBANK", "SBIN"}
 STOCK_LOTS = {"RELIANCE": 500, "HDFCBANK": 550, "ICICIBANK": 700, "SBIN": 750, "INFY": 400, "TCS": 175}
 STOCK_DEBIT_CAP = {"RELIANCE": Decimal("3.0"), "HDFCBANK": Decimal("2.7"), "ICICIBANK": Decimal("2.1"), "SBIN": Decimal("2.0"), "INFY": Decimal("3.75"), "TCS": Decimal("8.6")}
+# Strike spacing used to cap debit-spread payouts at their structural max value.
+SPREAD_WIDTH_POINTS = {"NIFTY": Decimal("50"), "BANKNIFTY": Decimal("100")}
+# Maximum age of a signal before tick mode refuses to open it (two 5m candles).
+SIGNAL_MAX_AGE = timedelta(minutes=10)
+
+
+def strategy_cost_rupees(strategy_id: str) -> Decimal:
+    return Decimal("250") if strategy_id == "single_stock_momentum_index_confirm" else Decimal("120")
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST)
 
 @dataclass
 class ProxyTrade:
@@ -93,7 +105,8 @@ def q2(v: Decimal) -> Decimal:
 
 
 def connect_db() -> psycopg.Connection:
-    return psycopg.connect(DATABASE_URL)
+    # Pin the session timezone so ts::date / current_date resolve in IST on any host.
+    return psycopg.connect(DATABASE_URL, options="-c timezone=Asia/Kolkata")
 
 
 def sha256_file(path: Path) -> str:
@@ -192,6 +205,25 @@ def sessions_to_monthly_expiry(day: date, trading_days: list[date]) -> int:
     return len([d for d in trading_days if day <= d <= last])
 
 
+def debit_spread_max_r(signal: StrategySignal, underlying: str, risk: Decimal) -> Decimal | None:
+    """Structural payout ceiling for a debit spread: (width - debit) * lot / risk.
+
+    Returns None when the structure is not a debit spread or the strike width is
+    unknown (e.g. single stocks), in which case the configured target_r stands.
+    """
+    if not signal.structure.endswith("debit_spread") or risk <= 0:
+        return None
+    width = SPREAD_WIDTH_POINTS.get(underlying)
+    debit = signal.metadata.get("net_debit_per_share")
+    lot = signal.metadata.get("lot_size")
+    if width is None or debit is None or lot is None:
+        return None
+    max_value = (width - Decimal(str(debit))) * Decimal(str(lot))
+    if max_value <= 0:
+        return None
+    return (max_value / risk).quantize(Decimal("0.01"))
+
+
 def simulate_proxy_trade(
     signal: StrategySignal,
     rows: list[Candle],
@@ -208,6 +240,9 @@ def simulate_proxy_trade(
     if not after:
         return None
     risk = max(signal.max_loss_rupees, Decimal("1"))
+    spread_cap = debit_spread_max_r(signal, underlying, risk)
+    if spread_cap is not None:
+        target_r = min(target_r, spread_cap)
     sign = Decimal("1") if signal.direction in {"long", "long_ce"} else Decimal("-1")
     entry = signal.underlying_entry
     stop_underlying = entry * (Decimal("1") - sign * stop_pct)
@@ -264,6 +299,14 @@ def simulate_proxy_trade(
     )
 
 
+def runnable_strategy(cfg: StrategyPackConfig, sid: str):
+    """Return the strategy config when present, enabled, and paper-enabled; else None."""
+    strat = cfg.strategies.get(sid)
+    if strat is None or not strat.enabled or not strat.paper_trade_enabled:
+        return None
+    return strat
+
+
 def evaluate_day(day: date, data_by_symbol_day: dict[str, dict[date, list[Candle]]], all_days: list[date], cfg: StrategyPackConfig) -> list[tuple[StrategySignal, str, str, str, Decimal, Decimal, time]]:
     results: list[tuple[StrategySignal, str, str, str, Decimal, Decimal, time]] = []
     nifty = data_by_symbol_day.get(SYMBOLS["NIFTY"], {}).get(day, [])
@@ -272,42 +315,47 @@ def evaluate_day(day: date, data_by_symbol_day: dict[str, dict[date, list[Candle
     prev_nifty = data_by_symbol_day.get(SYMBOLS["NIFTY"], {}).get(prev_day, []) if prev_day else []
     prev_bank = data_by_symbol_day.get(SYMBOLS["BANKNIFTY"], {}).get(prev_day, []) if prev_day else []
 
-    if cfg.strategies["nifty_orb_debit_spread"].paper_trade_enabled and nifty:
-        sig = evaluate_nifty_orb_debit_spread(nifty, vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65)
+    orb_cfg = runnable_strategy(cfg, "nifty_orb_debit_spread")
+    if orb_cfg and nifty:
+        sig = evaluate_nifty_orb_debit_spread(nifty, vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65, max_trade_loss=orb_cfg.max_trade_loss)
         if sig:
             results.append((sig, "NIFTY", SYMBOLS["NIFTY"], "Nifty ORB Debit Spread", Decimal("0.0025"), Decimal("2"), time(13, 45)))
 
-    if cfg.strategies["cpr_trend_debit_spread"].paper_trade_enabled:
+    cpr_cfg = runnable_strategy(cfg, "cpr_trend_debit_spread")
+    if cpr_cfg:
         sig = None
         under = "NIFTY"
         symbol = SYMBOLS["NIFTY"]
         rows = nifty
         if nifty and prev_nifty:
-            sig = evaluate_cpr_trend_debit_spread(nifty, previous_day=prev_nifty, underlying="NIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("22"), lot_size=65, sessions_to_expiry=10)
+            sig = evaluate_cpr_trend_debit_spread(nifty, previous_day=prev_nifty, underlying="NIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("22"), lot_size=65, sessions_to_expiry=10, max_trade_loss=cpr_cfg.max_trade_loss)
         if not sig and banknifty and prev_bank:
             under = "BANKNIFTY"
             symbol = SYMBOLS["BANKNIFTY"]
             rows = banknifty
-            sig = evaluate_cpr_trend_debit_spread(banknifty, previous_day=prev_bank, underlying="BANKNIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("45"), lot_size=30, sessions_to_expiry=sessions_to_monthly_expiry(day, all_days))
+            sig = evaluate_cpr_trend_debit_spread(banknifty, previous_day=prev_bank, underlying="BANKNIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("45"), lot_size=30, sessions_to_expiry=sessions_to_monthly_expiry(day, all_days), max_trade_loss=cpr_cfg.max_trade_loss)
         if sig:
             results.append((sig, under, symbol, "CPR Trend-Day Debit Spread", Decimal("0.0025"), Decimal("2"), time(14, 45)))
 
-    if cfg.strategies["expiry_tuesday_directional"].paper_trade_enabled and nifty:
-        sig = evaluate_expiry_tuesday_directional(nifty, trade_date=day, vix=Decimal("18"), option_premium=Decimal("80"), lot_size=65)
+    expiry_cfg = runnable_strategy(cfg, "expiry_tuesday_directional")
+    if expiry_cfg and nifty:
+        sig = evaluate_expiry_tuesday_directional(nifty, trade_date=day, vix=Decimal("18"), option_premium=Decimal("80"), lot_size=65, max_trade_loss=expiry_cfg.max_trade_loss)
         if sig:
             results.append((sig, "NIFTY", SYMBOLS["NIFTY"], "Expiry Tuesday Nifty Defined-Risk Directional", Decimal("0.0020"), Decimal("1"), time(13, 0)))
 
-    if cfg.strategies["nifty_vwap_mean_reversion"].paper_trade_enabled and nifty:
+    vwap_cfg = runnable_strategy(cfg, "nifty_vwap_mean_reversion")
+    if vwap_cfg and nifty:
         cpr_narrow = is_cpr_narrow(prev_nifty, "NIFTY") if prev_nifty else False
         # Evaluate at each candle after 09:50 until first signal.
         for i in range(3, len(nifty)):
             partial = nifty[: i + 1]
-            sig = evaluate_nifty_vwap_mean_reversion(partial, is_range_day=not cpr_narrow, is_cpr_narrow=cpr_narrow, vix=Decimal("15"), rsi9=simple_rsi9(partial), option_premium=Decimal("90"), lot_size=65)
+            sig = evaluate_nifty_vwap_mean_reversion(partial, is_range_day=not cpr_narrow, is_cpr_narrow=cpr_narrow, vix=Decimal("15"), rsi9=simple_rsi9(partial), option_premium=Decimal("90"), lot_size=65, max_trade_loss=vwap_cfg.max_trade_loss)
             if sig:
                 results.append((sig, "NIFTY", SYMBOLS["NIFTY"], "Nifty VWAP Mean Reversion Long", Decimal("0.0030"), Decimal("1.2"), time(14, 45)))
                 break
 
-    if cfg.strategies["single_stock_momentum_index_confirm"].paper_trade_enabled:
+    stock_cfg = runnable_strategy(cfg, "single_stock_momentum_index_confirm")
+    if stock_cfg:
         for stock in ["HDFCBANK", "ICICIBANK", "SBIN", "RELIANCE", "INFY", "TCS"]:
             srows = data_by_symbol_day.get(SYMBOLS[stock], {}).get(day, [])
             idx_name = "BANKNIFTY" if stock in BANK_STOCKS else "NIFTY"
@@ -328,6 +376,7 @@ def evaluate_day(day: date, data_by_symbol_day: dict[str, dict[date, list[Candle
                 earnings_today=False,
                 stock_intraday_pct=intraday_pct(srows, pct_until),
                 index_intraday_pct=intraday_pct(irows, pct_until),
+                max_trade_loss=stock_cfg.max_trade_loss,
             )
             if sig:
                 results.append((sig, stock, SYMBOLS[stock], "Single-Stock Momentum with Index Confirmation", Decimal("0.0040"), Decimal("2"), time(14, 30)))
@@ -349,12 +398,12 @@ def run_backtest(config_path: Path, start: date, end: date) -> tuple[Path, Path,
             continue
         for sig, underlying, underlying_symbol, name, stop_pct, target_r, exit_t in evaluate_day(day, data_by_symbol_day, all_days, cfg):
             rows = data_by_symbol_day.get(underlying_symbol, {}).get(day, [])
-            cost = Decimal("250") if sig.strategy_id == "single_stock_momentum_index_confirm" else Decimal("120")
+            cost = strategy_cost_rupees(sig.strategy_id)
             trade = simulate_proxy_trade(sig, rows, strategy_name=name, underlying=underlying, underlying_symbol=underlying_symbol, stop_pct=stop_pct, target_r=target_r, time_exit=exit_t, cost_rupees=cost)
             if trade:
                 trades.append(trade)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = now_ist().strftime("%Y%m%d_%H%M%S")
     csv_path = REPORT_DIR / f"nse_intraday_options_strategy_pack_proxy_trades_{stamp}.csv"
     md_path = REPORT_DIR / f"nse_intraday_options_strategy_pack_proxy_backtest_{stamp}.md"
     write_trades_csv(csv_path, trades)
@@ -413,8 +462,9 @@ def write_report(path: Path, trades: list[ProxyTrade], start: date, end: date) -
 
 def upsert_campaign(conn: psycopg.Connection, cfg: StrategyPackConfig, config_path: Path) -> int:
     raw = config_to_json_dict(cfg)
-    name = f"nse_intraday_options_pack_5x50000_{date.today().isoformat()}"
-    end_date = date.today() + timedelta(days=31)
+    today = now_ist().date()
+    name = f"nse_intraday_options_pack_5x50000_{today.isoformat()}"
+    end_date = today + timedelta(days=31)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -447,7 +497,7 @@ def upsert_campaign(conn: psycopg.Connection, cfg: StrategyPackConfig, config_pa
 
 
 def refresh_today_history(symbols: list[str]) -> None:
-    today = date.today().isoformat()
+    today = now_ist().date().isoformat()
     cmd = [sys.executable, str(PROJECT_ROOT / "scripts" / "ingest_fyers_history.py"), "--resolution", "5", "--from", today, "--to", today, "--symbols", *symbols]
     env = os.environ.copy()
     env.setdefault("FYERS_LOG_PATH", "/tmp/")
@@ -460,7 +510,7 @@ def today_scan(config_path: Path, *, refresh: bool = False) -> list[tuple[Strate
     symbols = list(SYMBOLS.values())
     if refresh:
         refresh_today_history(symbols)
-    today = date.today()
+    today = now_ist().date()
     start = today - timedelta(days=7)
     with connect_db() as conn:
         data = fetch_candles(conn, symbols, start, today, "5")
@@ -470,24 +520,24 @@ def today_scan(config_path: Path, *, refresh: bool = False) -> list[tuple[Strate
 
 
 
-def current_candle_for_symbol(conn: psycopg.Connection, symbol: str) -> Candle | None:
+def todays_candles_for_symbol(conn: psycopg.Connection, symbol: str, *, after: datetime | None = None) -> list[Candle]:
     with conn.cursor() as cur:
         cur.execute(
             """
             select ts, open, high, low, close, volume
             from market.candles
             where symbol=%s and resolution='5' and ts::date=current_date
-            order by ts desc
-            limit 1
+              and (%s::timestamptz is null or ts > %s::timestamptz)
+            order by ts
             """,
-            (symbol,),
+            (symbol, after, after),
         )
-        row = cur.fetchone()
-    if not row:
-        return None
-    ts, o, h, l, c, vol = row
-    local_ts = ts.astimezone(IST).replace(tzinfo=None) if getattr(ts, "tzinfo", None) else ts
-    return Candle(local_ts, Decimal(str(o)), Decimal(str(h)), Decimal(str(l)), Decimal(str(c)), int(vol or 0))
+        rows = cur.fetchall()
+    out: list[Candle] = []
+    for ts, o, h, l, c, vol in rows:
+        local_ts = ts.astimezone(IST).replace(tzinfo=None) if getattr(ts, "tzinfo", None) else ts
+        out.append(Candle(local_ts, Decimal(str(o)), Decimal(str(h)), Decimal(str(l)), Decimal(str(c)), int(vol or 0)))
+    return out
 
 
 def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[dict[str, Any]]:
@@ -496,7 +546,7 @@ def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[
         cur.execute(
             """
             select pack_trade_id, strategy_id, underlying_symbol, direction, entry_underlying, risk_rupees,
-                   stop_underlying, target_underlying, target_r, raw
+                   stop_underlying, target_underlying, target_r, entry_time, raw
             from research.strategy_pack_paper_trades
             where campaign_id=%s and status='open'
             order by entry_time
@@ -504,30 +554,42 @@ def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[
             (campaign_id,),
         )
         rows = cur.fetchall()
-    for trade_id, sid, symbol, direction, entry, risk, stop_underlying, target_underlying, target_r, raw in rows:
-        candle = current_candle_for_symbol(conn, symbol)
-        if candle is None:
+    for trade_id, sid, symbol, direction, entry, risk, stop_underlying, target_underlying, target_r, entry_time, raw in rows:
+        # Walk every candle since entry (stop-first per candle, same rules as the
+        # backtest) so stop/target touches between ticks are not missed.
+        candles = todays_candles_for_symbol(conn, symbol, after=entry_time)
+        if not candles:
             continue
         sign = Decimal("1") if direction in {"long", "long_ce"} else Decimal("-1")
-        stopped = candle.low <= Decimal(str(stop_underlying)) if sign > 0 else candle.high >= Decimal(str(stop_underlying))
-        targeted = candle.high >= Decimal(str(target_underlying)) if sign > 0 else candle.low <= Decimal(str(target_underlying))
+        stop_dec = Decimal(str(stop_underlying))
+        target_dec = Decimal(str(target_underlying))
         exit_reason = None
+        exit_candle = candles[-1]
         pnl_r = Decimal("0")
+        for candle in candles:
+            stopped = candle.low <= stop_dec if sign > 0 else candle.high >= stop_dec
+            targeted = candle.high >= target_dec if sign > 0 else candle.low <= target_dec
+            if stopped:
+                exit_reason = "structure_stop"
+                pnl_r = Decimal("-1")
+                exit_candle = candle
+                break
+            if targeted:
+                exit_reason = "target_r"
+                pnl_r = Decimal(str(target_r))
+                exit_candle = candle
+                break
         now_t = datetime.now(IST).time()
         exit_t = time.fromisoformat((raw or {}).get("time_exit", "15:20")) if isinstance(raw, dict) else time(15, 20)
-        if stopped:
-            exit_reason = "structure_stop"
-            pnl_r = Decimal("-1")
-        elif targeted:
-            exit_reason = "target_r"
-            pnl_r = Decimal(str(target_r))
-        elif now_t >= exit_t or now_t >= time(15, 20):
-            move = sign * (candle.close - Decimal(str(entry))) / abs(Decimal(str(entry)) - Decimal(str(stop_underlying)))
+        if not exit_reason and (now_t >= exit_t or now_t >= time(15, 20)):
+            move = sign * (exit_candle.close - Decimal(str(entry))) / abs(Decimal(str(entry)) - stop_dec)
             pnl_r = max(Decimal("-1"), min(Decimal(str(target_r)), move))
             exit_reason = "time_exit"
         if not exit_reason:
             continue
-        pnl = q2(Decimal(str(risk)) * pnl_r)
+        # Same round-trip cost model as the backtest so paper P&L stays comparable.
+        pnl = q2(Decimal(str(risk)) * pnl_r - strategy_cost_rupees(sid))
+        candle = exit_candle
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -554,6 +616,22 @@ def stop_target_from_signal(sig: StrategySignal, stop_pct: Decimal, target_r: De
     stop = sig.underlying_entry * (Decimal("1") - sign * stop_pct)
     target = sig.underlying_entry * (Decimal("1") + sign * stop_pct * target_r)
     return q2(stop), q2(target)
+
+
+def entry_window_open(now: datetime, cfg: StrategyPackConfig) -> bool:
+    """No new paper entries before no_new_entries_before or at/after force_exit_time."""
+    t = now.time()
+    return time.fromisoformat(cfg.no_new_entries_before) <= t < time.fromisoformat(cfg.force_exit_time)
+
+
+def signal_is_fresh(entry_time: datetime, now: datetime, *, max_age: timedelta = SIGNAL_MAX_AGE) -> bool:
+    """A signal may only open a paper trade close to when its candle printed.
+
+    today_scan re-detects the first qualifying candle of the whole day, so a
+    tick running hours later must not record that stale price as a fill.
+    """
+    age = now - entry_time
+    return timedelta(0) <= age <= max_age
 
 
 def run_tick(config_path: Path, *, dry_run: bool = False, refresh: bool = False) -> list[dict[str, Any]]:
@@ -586,21 +664,38 @@ def run_tick(config_path: Path, *, dry_run: bool = False, refresh: bool = False)
             if dry_run:
                 out.append(payload)
                 continue
+            strat = runnable_strategy(cfg, sig.strategy_id)
+            if strat is None:
+                continue
+            now_local = now_ist().replace(tzinfo=None)
+            if not entry_window_open(now_local, cfg):
+                continue
+            if not signal_is_fresh(sig.entry_time, now_local):
+                continue
             with conn.cursor() as cur:
                 cur.execute(
                     """
                     select
-                      count(*) filter (where entry_time::date=current_date and status in ('open','closed')) as trades_today,
-                      count(*) filter (where status='open') as open_now
+                      count(*) filter (where strategy_id=%s and entry_time::date=current_date and status in ('open','closed')) as trades_today,
+                      count(*) filter (where strategy_id=%s and status='open') as open_now,
+                      count(*) filter (where status='open') as open_global,
+                      coalesce(sum(realized_pnl) filter (where strategy_id=%s and status='closed' and exit_time::date=current_date), 0) as realized_today,
+                      count(*) filter (where strategy_id=%s and entry_time=%s) as same_signal
                     from research.strategy_pack_paper_trades
-                    where campaign_id=%s and strategy_id=%s
+                    where campaign_id=%s
                     """,
-                    (campaign_id, sig.strategy_id),
+                    (sig.strategy_id, sig.strategy_id, sig.strategy_id, sig.strategy_id, sig.entry_time, campaign_id),
                 )
-                trades_today, open_now = cur.fetchone()
-                if int(open_now or 0) >= cfg.strategies[sig.strategy_id].max_open_positions:
+                trades_today, open_now, open_global, realized_today, same_signal = cur.fetchone()
+                if int(same_signal or 0) > 0:
                     continue
-                if int(trades_today or 0) >= cfg.strategies[sig.strategy_id].max_trades_per_day:
+                if int(open_now or 0) >= strat.max_open_positions:
+                    continue
+                if int(open_global or 0) >= cfg.global_max_open_positions:
+                    continue
+                if int(trades_today or 0) >= strat.max_trades_per_day:
+                    continue
+                if Decimal(str(realized_today or 0)) <= -strat.max_daily_loss:
                     continue
                 raw = dict(sig.metadata)
                 raw.update({"stop_pct": str(stop_pct), "target_r": str(target_r), "time_exit": exit_t.isoformat(), "proxy_paper": True})
@@ -633,7 +728,7 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--mode", choices=["init-config", "init-campaign", "backtest", "scan", "tick"], default="scan")
     parser.add_argument("--from", dest="start", default="2026-02-01")
-    parser.add_argument("--to", dest="end", default=date.today().isoformat())
+    parser.add_argument("--to", dest="end", default=now_ist().date().isoformat())
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

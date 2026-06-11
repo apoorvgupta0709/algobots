@@ -57,6 +57,11 @@ class StrategyPackConfig:
             raise ValueError("live_orders_enabled must be false")
         if not self.strategies:
             raise ValueError("at least one strategy must be configured")
+        for key, value in (("force_exit_time", self.force_exit_time), ("no_new_entries_before", self.no_new_entries_before)):
+            try:
+                time.fromisoformat(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{key} is not a valid HH:MM time: {value!r}") from exc
         for sid, cfg in self.strategies.items():
             if not cfg.paper_trade_enabled:
                 continue
@@ -149,8 +154,8 @@ def load_config(path: Path) -> StrategyPackConfig:
         strategies[sid] = StrategyRuntimeConfig(
             strategy_id=sid,
             name=raw.get("name", sid),
-            enabled=bool(raw.get("enabled", True)),
-            paper_trade_enabled=bool(raw.get("paper_trade_enabled", True)),
+            enabled=strict_bool(raw.get("enabled", True), key=f"strategies.{sid}.enabled"),
+            paper_trade_enabled=strict_bool(raw.get("paper_trade_enabled", True), key=f"strategies.{sid}.paper_trade_enabled"),
             paper_capital=D(raw.get("paper_capital", "50000")),
             max_trade_loss=D(raw.get("max_trade_loss", "1500")),
             max_daily_loss=D(raw.get("max_daily_loss", "5000")),
@@ -202,8 +207,22 @@ def opening_range(candles: list[Candle], *, start: time = time(9, 15), end: time
 
 
 def breached_both_sides(rows: list[Candle], high: Decimal, low: Decimal) -> bool:
-    # Before OR completion, a valid OR should not have already escaped both sides.
+    """True when the given candles traded strictly beyond both the high and the low."""
     return any(c.high > high for c in rows) and any(c.low < low for c in rows)
+
+
+def or_formation_whipsaw(or_rows: list[Candle], *, split: time = time(9, 30)) -> bool:
+    """Card filter: skip if the opening range was breached both sides before 09:45.
+
+    The final OR levels cannot be breached during their own formation, so the
+    deterministic reading is: candles after the 09:15-09:30 provisional range
+    escaping both of its sides marks an indecision/whipsaw open.
+    """
+    early = [c for c in or_rows if c.ts.time() < split]
+    late = [c for c in or_rows if c.ts.time() >= split]
+    if not early or not late:
+        return False
+    return breached_both_sides(late, max(c.high for c in early), min(c.low for c in early))
 
 
 def volume_confirm(candle: Candle, prior_rows: list[Candle], multiple: Decimal) -> bool:
@@ -219,6 +238,7 @@ def evaluate_nifty_orb_debit_spread(
     vix: Decimal,
     net_debit_per_share: Decimal,
     lot_size: int,
+    max_trade_loss: Decimal = Decimal("1500"),
 ) -> StrategySignal | None:
     if not (Decimal("10") <= D(vix) <= Decimal("22")):
         return None
@@ -229,14 +249,24 @@ def evaluate_nifty_orb_debit_spread(
     width_pct = (or_high - or_low) / spot if spot else Decimal("0")
     if width_pct < Decimal("0.0025") or width_pct > Decimal("0.012"):
         return None
-    if breached_both_sides(or_rows, or_high, or_low):
+    if or_formation_whipsaw(or_rows):
         return None
-    if not check_debit_spread_risk(D(net_debit_per_share), lot_size=lot_size):
+    if not check_debit_spread_risk(D(net_debit_per_share), lot_size=lot_size, max_loss=max_trade_loss):
         return None
+    metadata = {
+        "or_high": str(or_high),
+        "or_low": str(or_low),
+        "width_pct": str(width_pct),
+        "net_debit_per_share": str(D(net_debit_per_share)),
+        "lot_size": lot_size,
+    }
     for candle in candles:
         if not in_time_window(candle.ts, time(9, 45), time(13, 30)):
             continue
         prior = [x for x in candles if x.ts < candle.ts]
+        post_or = [x for x in prior if x.ts.time() >= time(9, 45)]
+        if breached_both_sides(post_or, or_high, or_low):
+            return None
         if candle.close > or_high and volume_confirm(candle, prior, Decimal("1.5")):
             return StrategySignal(
                 strategy_id="nifty_orb_debit_spread",
@@ -247,7 +277,7 @@ def evaluate_nifty_orb_debit_spread(
                 reason="5m close above opening range with volume confirmation",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata={"or_high": str(or_high), "or_low": str(or_low), "width_pct": str(width_pct)},
+                metadata=metadata,
             )
         if candle.close < or_low and volume_confirm(candle, prior, Decimal("1.5")):
             return StrategySignal(
@@ -259,7 +289,7 @@ def evaluate_nifty_orb_debit_spread(
                 reason="5m close below opening range with volume confirmation",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata={"or_high": str(or_high), "or_low": str(or_low), "width_pct": str(width_pct)},
+                metadata=metadata,
             )
     return None
 
@@ -283,22 +313,26 @@ def evaluate_cpr_trend_debit_spread(
     net_debit_per_share: Decimal,
     lot_size: int,
     sessions_to_expiry: int,
+    max_trade_loss: Decimal = Decimal("1500"),
 ) -> StrategySignal | None:
     if not previous_day or not (Decimal("10") <= D(vix) <= Decimal("24")):
         return None
     if underlying.upper() == "BANKNIFTY" and sessions_to_expiry <= 3:
         return None
-    if not check_debit_spread_risk(D(net_debit_per_share), lot_size=lot_size):
+    if not check_debit_spread_risk(D(net_debit_per_share), lot_size=lot_size, max_loss=max_trade_loss):
         return None
     pivot, bc, tc, prev_close = cpr_from_previous_day(previous_day)
     threshold = Decimal("0.0035") if underlying.upper() == "BANKNIFTY" else Decimal("0.003")
     width_pct = abs(tc - bc) / prev_close if prev_close else Decimal("0")
     if width_pct > threshold:
         return None
-    first15 = next((c for c in candles if c.ts.time() >= time(9, 15)), None)
-    if first15 is None:
+    # Card: bias comes from the first 15-minute close, i.e. the close of the
+    # last 5m candle before 09:30 once the full 09:15-09:30 window has printed.
+    first15_rows = [c for c in candles if time(9, 15) <= c.ts.time() < time(9, 30)]
+    if len(first15_rows) < 3:
         return None
-    bias = "long" if first15.close > tc else "short" if first15.close < bc else "none"
+    first15_close = first15_rows[-1].close
+    bias = "long" if first15_close > tc else "short" if first15_close < bc else "none"
     if bias == "none":
         return None
     prev_high = max(c.high for c in previous_day)
@@ -316,7 +350,7 @@ def evaluate_cpr_trend_debit_spread(
                 reason="narrow CPR trend day long break beyond previous high",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct)},
+                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct), "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size},
             )
         if bias == "short" and candle.close < prev_low:
             return StrategySignal(
@@ -328,7 +362,7 @@ def evaluate_cpr_trend_debit_spread(
                 reason="narrow CPR trend day short break beyond previous low",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct)},
+                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct), "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size},
             )
     return None
 
@@ -340,6 +374,7 @@ def evaluate_expiry_tuesday_directional(
     vix: Decimal,
     option_premium: Decimal,
     lot_size: int,
+    max_trade_loss: Decimal = Decimal("1500"),
 ) -> StrategySignal | None:
     if trade_date.weekday() != 1 or D(vix) > Decimal("24"):
         return None
@@ -351,7 +386,7 @@ def evaluate_expiry_tuesday_directional(
         return None
     stop_per_share = min(D(option_premium) * Decimal("0.30"), Decimal("22.3"))
     stop_rupees = (stop_per_share * Decimal(lot_size)).quantize(TWO_PLACES)
-    if stop_rupees > Decimal("1500"):
+    if stop_rupees > max_trade_loss:
         return None
     for candle in candles:
         if not in_time_window(candle.ts, time(9, 45), time(12, 30)):
@@ -427,6 +462,7 @@ def evaluate_nifty_vwap_mean_reversion(
     rsi9: Decimal,
     option_premium: Decimal,
     lot_size: int,
+    max_trade_loss: Decimal = Decimal("1500"),
 ) -> StrategySignal | None:
     if not is_range_day or is_cpr_narrow or D(vix) > Decimal("20") or not candles:
         return None
@@ -435,11 +471,11 @@ def evaluate_nifty_vwap_mean_reversion(
         return None
     vwap = session_vwap(candles)
     sigma = stddev([c.close for c in candles])
-    lower = vwap - Decimal("1.0") * sigma  # conservative proxy for short samples; production config uses 2σ
-    upper = vwap + Decimal("1.0") * sigma
+    lower = vwap - Decimal("2.0") * sigma
+    upper = vwap + Decimal("2.0") * sigma
     stop_per_share = min(Decimal("22.3"), D(option_premium) * Decimal("0.25"))
     stop_rupees = (stop_per_share * Decimal(lot_size)).quantize(TWO_PLACES)
-    if stop_rupees > Decimal("1500"):
+    if stop_rupees > max_trade_loss:
         return None
     if latest.low <= lower and bullish_rejection(latest) and Decimal("30") <= D(rsi9) <= Decimal("45"):
         return StrategySignal(
@@ -483,18 +519,24 @@ def evaluate_single_stock_momentum(
     earnings_today: bool,
     stock_intraday_pct: Decimal,
     index_intraday_pct: Decimal,
+    max_trade_loss: Decimal = Decimal("1500"),
 ) -> StrategySignal | None:
     if earnings_today or not (Decimal("10") <= D(vix) <= Decimal("24")):
         return None
     if D(option_spread_pct) > Decimal("0.005"):
         return None
-    if D(stock_intraday_pct) - D(index_intraday_pct) < Decimal("0.2"):
+    if not check_debit_spread_risk(D(net_debit_per_share), lot_size=lot_size, max_loss=max_trade_loss):
         return None
-    if not check_debit_spread_risk(D(net_debit_per_share), lot_size=lot_size):
-        return None
-    stock_sig = evaluate_nifty_orb_debit_spread(stock_candles, vix=D(vix), net_debit_per_share=D(net_debit_per_share), lot_size=lot_size)
+    stock_sig = evaluate_nifty_orb_debit_spread(stock_candles, vix=D(vix), net_debit_per_share=D(net_debit_per_share), lot_size=lot_size, max_trade_loss=max_trade_loss)
     index_sig = evaluate_nifty_orb_debit_spread(index_candles, vix=D(vix), net_debit_per_share=Decimal("1"), lot_size=1)
     if not stock_sig or not index_sig or stock_sig.direction != index_sig.direction:
+        return None
+    # Relative strength must point in the trade direction: longs need the stock
+    # outperforming the index, shorts need it underperforming.
+    relative_strength = D(stock_intraday_pct) - D(index_intraday_pct)
+    if stock_sig.direction == "long" and relative_strength < Decimal("0.2"):
+        return None
+    if stock_sig.direction == "short" and relative_strength > Decimal("-0.2"):
         return None
     return StrategySignal(
         strategy_id="single_stock_momentum_index_confirm",
@@ -505,7 +547,7 @@ def evaluate_single_stock_momentum(
         reason=f"{stock_symbol} OR breakout confirmed by {confirming_index} and relative strength",
         max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
         stop_loss_rupees=Decimal("1300"),
-        metadata={"stock_symbol": stock_symbol, "confirming_index": confirming_index},
+        metadata={"stock_symbol": stock_symbol, "confirming_index": confirming_index, "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size, "relative_strength": str(relative_strength)},
     )
 
 
