@@ -46,6 +46,8 @@ from scripts.banknifty_options_paper import (
 REPORT_DIR = PROJECT_ROOT / "reports"
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "banknifty_options_paper.json"
 TWO_PLACES = Decimal("0.01")
+# Round-trip cost per 1-lot BankNifty option trade (brokerage + slippage + spread crossing).
+TRADE_COST_RUPEES = Decimal("100")
 
 
 @dataclass(frozen=True)
@@ -372,6 +374,7 @@ def simulate_trade(
             exit_ts, exit_index, exit_reason = c.ts, c.close, "force_intraday_exit"
             break
 
+    pnl = (pnl - TRADE_COST_RUPEES).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
     pnl_r = (pnl / risk_rupees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if risk_rupees else Decimal("0")
     mfe_r = (best_pnl / risk_rupees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if risk_rupees else Decimal("0")
     capture = (pnl / best_pnl * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if best_pnl > 0 and pnl > 0 else Decimal("0")
@@ -588,6 +591,8 @@ def write_outputs(trades: list[Trade], summary: dict[str, Any]) -> tuple[Path, P
         "## Data caveat",
         "",
         "Stored 1-min/5-min BankNifty index and constituent candles were used. Historical expired BankNifty option-chain candles are not available in the current FYERS master, so the option leg is simulated with the configured index-to-option beta risk model. Treat this as signal/risk validation, not final option-candle acceptance.",
+        "",
+        f"Cost model: \u20b9{TRADE_COST_RUPEES} round-trip per trade (brokerage + slippage), subtracted from every trade.",
         "",
         "## Summary",
     ]

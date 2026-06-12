@@ -8,8 +8,9 @@
   "strategies": {
     "nifty_orb_debit_spread": {
       "name": "Nifty ORB Debit Spread",
-      "enabled": true,
-      "paper_trade_enabled": true,
+      "enabled": false,
+      "paper_trade_enabled": false,
+      "notes": "Disabled 2026-06-12: gross-negative in every month of the Feb-Jun backtest (-11069 pre-cost, -15749 net). Needs a signal redesign before re-enabling.",
       "paper_capital": "50000",
       "max_trade_loss": "1500",
       "max_daily_loss": "5000",
@@ -21,6 +22,8 @@
       "name": "CPR Trend-Day Debit Spread",
       "enabled": true,
       "paper_trade_enabled": true,
+      "underlyings": ["BANKNIFTY"],
+      "notes": "NIFTY leg disabled 2026-06-12: -8431 over Feb-Jun while the BANKNIFTY leg made +3225.",
       "paper_capital": "50000",
       "max_trade_loss": "1500",
       "max_daily_loss": "5000",

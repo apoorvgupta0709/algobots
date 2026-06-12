@@ -38,6 +38,9 @@ class StrategyRuntimeConfig:
     max_premium_exposure: Decimal = Decimal("40000")
     max_trades_per_day: int = 3
     max_open_positions: int = 1
+    # Which underlyings this strategy may trade (only consulted by strategies
+    # that scan more than one, e.g. the CPR trend strategy).
+    underlyings: tuple[str, ...] = ("NIFTY", "BANKNIFTY")
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,7 @@ def config_to_json_dict(cfg: StrategyPackConfig) -> dict[str, Any]:
                 "max_premium_exposure": str(s.max_premium_exposure),
                 "max_trades_per_day": s.max_trades_per_day,
                 "max_open_positions": s.max_open_positions,
+                "underlyings": list(s.underlyings),
             }
             for sid, s in cfg.strategies.items()
         },
@@ -162,6 +166,7 @@ def load_config(path: Path) -> StrategyPackConfig:
             max_premium_exposure=D(raw.get("max_premium_exposure", "40000")),
             max_trades_per_day=int(raw.get("max_trades_per_day", 3)),
             max_open_positions=int(raw.get("max_open_positions", 1)),
+            underlyings=tuple(str(u).upper() for u in (raw.get("underlyings") or ["NIFTY", "BANKNIFTY"])),
         )
     cfg = StrategyPackConfig(
         paper_only=strict_bool(data.get("paper_only", True), key="paper_only"),
@@ -277,7 +282,7 @@ def evaluate_nifty_orb_debit_spread(
                 reason="5m close above opening range with volume confirmation",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata=metadata,
+                metadata={**metadata, "structure_level": str(or_high)},
             )
         if candle.close < or_low and volume_confirm(candle, prior, Decimal("1.5")):
             return StrategySignal(
@@ -289,7 +294,7 @@ def evaluate_nifty_orb_debit_spread(
                 reason="5m close below opening range with volume confirmation",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata=metadata,
+                metadata={**metadata, "structure_level": str(or_low)},
             )
     return None
 
@@ -350,7 +355,7 @@ def evaluate_cpr_trend_debit_spread(
                 reason="narrow CPR trend day long break beyond previous high",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct), "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size},
+                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct), "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size, "structure_level": str(prev_high)},
             )
         if bias == "short" and candle.close < prev_low:
             return StrategySignal(
@@ -362,7 +367,7 @@ def evaluate_cpr_trend_debit_spread(
                 reason="narrow CPR trend day short break beyond previous low",
                 max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
                 stop_loss_rupees=Decimal("1200"),
-                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct), "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size},
+                metadata={"pivot": str(pivot), "bc": str(bc), "tc": str(tc), "width_pct": str(width_pct), "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size, "structure_level": str(prev_low)},
             )
     return None
 
@@ -547,7 +552,7 @@ def evaluate_single_stock_momentum(
         reason=f"{stock_symbol} OR breakout confirmed by {confirming_index} and relative strength",
         max_loss_rupees=(D(net_debit_per_share) * Decimal(lot_size)).quantize(TWO_PLACES),
         stop_loss_rupees=Decimal("1300"),
-        metadata={"stock_symbol": stock_symbol, "confirming_index": confirming_index, "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size, "relative_strength": str(relative_strength)},
+        metadata={"stock_symbol": stock_symbol, "confirming_index": confirming_index, "net_debit_per_share": str(D(net_debit_per_share)), "lot_size": lot_size, "relative_strength": str(relative_strength), "structure_level": stock_sig.metadata.get("structure_level")},
     )
 
 

@@ -231,7 +231,7 @@
     "beta_fallback_otm1": 0.35
   },
   "exits": {
-    "breakeven_at_r": 0.8,
+    "breakeven_at_r": 0.5,
     "ratchet_start_r": 1.0,
     "ratchet_giveback_pct": 30,
     "ratchet_giveback_min_inr": 300,
