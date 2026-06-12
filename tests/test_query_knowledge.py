@@ -94,3 +94,15 @@ def test_hit_json_shape() -> None:
         "content",
         "score",
     }
+
+
+def test_format_citation_page_start_only() -> None:
+    assert (
+        qk.format_citation(make_hit(page_start=41, page_end=None))
+        == "Trading Book — Chapter 3 Stops, page 41"
+    )
+
+
+def test_run_search_rejects_non_positive_top_k() -> None:
+    assert qk.run_search(conn=None, query_text="x", query_vector=[0.0], top_k=0, book=None) == []
+    assert qk.run_search(conn=None, query_text="x", query_vector=[0.0], top_k=-3, book=None) == []
