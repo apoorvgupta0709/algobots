@@ -132,11 +132,28 @@ class RiskFilterConfig:
     max_spread_pct: Decimal = Decimal("3.0")
     max_spread_rupees: Decimal = Decimal("5.0")
     min_volume: int = 0
+    min_oi: int = 0
     require_greeks: bool = False
     min_abs_delta: Decimal = Decimal("0.25")
     max_abs_theta: Decimal = Decimal("0")
     max_iv: Decimal = Decimal("0")
     require_iv: bool = False
+
+
+@dataclass(frozen=True)
+class ChainSignalConfig:
+    """Option-chain-derived entry confirmation/veto settings.
+
+    Every block_* flag defaults False so the gate is advisory: contradicting chain
+    context is recorded on the trade but never blocks an entry until the operator
+    promotes a specific check to blocking after observing the logs. A 0 threshold
+    disables that individual check."""
+    enabled: bool = False
+    block_on_iv_regime_high: bool = False
+    block_on_contradicting_oi: bool = False
+    block_on_pcr_extreme: bool = False
+    pcr_bullish_max: Decimal = Decimal("0")   # CE entry: PCR above this is a bearish-skew contradiction
+    pcr_bearish_min: Decimal = Decimal("0")   # PE entry: PCR below this is a bullish-skew contradiction
 
 
 @dataclass(frozen=True)
@@ -146,6 +163,7 @@ class OptionQuoteMetrics:
     spread: Decimal | None
     spread_pct: Decimal | None
     volume: int | None
+    oi: int | None
     delta: Decimal | None
     gamma: Decimal | None
     theta: Decimal | None
@@ -162,6 +180,7 @@ class OptionQuoteMetrics:
             "spread": s(self.spread),
             "spread_pct": s(self.spread_pct),
             "volume": self.volume,
+            "oi": self.oi,
             "delta": s(self.delta),
             "gamma": s(self.gamma),
             "theta": s(self.theta),
@@ -172,6 +191,14 @@ class OptionQuoteMetrics:
 
 @dataclass(frozen=True)
 class RiskFilterDecision:
+    allowed: bool
+    reasons: list[str]
+    warnings: list[str]
+    raw: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ChainSignalDecision:
     allowed: bool
     reasons: list[str]
     warnings: list[str]
@@ -256,11 +283,14 @@ class CampaignConfig:
     open_position_update_interval_minutes: int
     poll_interval_seconds: int
     quote_stale_seconds: int
+    chain_stale_seconds: int
+    chain_selection_enabled: bool
     paper_only: bool
     live_orders_enabled: bool
     notes: str
     strategy_router: tuple[StrategyCardRule, ...]
     risk_filter: RiskFilterConfig
+    chain_signals: ChainSignalConfig
 
 
 @dataclass(frozen=True)
@@ -389,6 +419,7 @@ def parse_risk_filter_config(raw: Any) -> RiskFilterConfig:
         max_spread_pct=decimal_from_config(raw.get("max_spread_pct"), defaults.max_spread_pct),
         max_spread_rupees=decimal_from_config(raw.get("max_spread_rupees"), defaults.max_spread_rupees),
         min_volume=int_from_config(raw.get("min_volume"), defaults.min_volume),
+        min_oi=int_from_config(raw.get("min_oi"), defaults.min_oi),
         require_greeks=bool_from_config(raw.get("require_greeks"), default=defaults.require_greeks),
         min_abs_delta=decimal_from_config(raw.get("min_abs_delta"), defaults.min_abs_delta),
         max_abs_theta=decimal_from_config(raw.get("max_abs_theta"), defaults.max_abs_theta),
@@ -447,6 +478,7 @@ def parse_option_quote_metrics(meta: Any, *, ltp: Decimal | None = None) -> Opti
     ask = _first_decimal(scopes, ("ask", "ask_price", "ap"))
     explicit_spread = _first_decimal(scopes, ("spread", "bid_ask_spread"))
     volume = _first_int(scopes, ("volume", "vol", "tot_traded_qty", "v"))
+    oi = _first_int(scopes, ("oi", "open_interest", "openInterest"))
     delta = _first_decimal(scopes, ("delta",))
     gamma = _first_decimal(scopes, ("gamma",))
     theta = _first_decimal(scopes, ("theta",))
@@ -473,6 +505,7 @@ def parse_option_quote_metrics(meta: Any, *, ltp: Decimal | None = None) -> Opti
         spread=spread,
         spread_pct=spread_pct,
         volume=volume,
+        oi=oi,
         delta=delta,
         gamma=gamma,
         theta=theta,
@@ -521,6 +554,21 @@ def _check_volume(metrics: OptionQuoteMetrics, rf: RiskFilterConfig) -> tuple[li
     return reasons, warnings
 
 
+def _check_open_interest(metrics: OptionQuoteMetrics, rf: RiskFilterConfig) -> tuple[list[str], list[str]]:
+    """Open-interest liquidity guard, mirroring _check_volume's fail-closed policy:
+    once min_oi is configured (> 0), a missing OI blocks the trade rather than
+    silently passing. OI is sourced from the option-chain snapshot. Disabled when
+    min_oi is 0, so today's behavior is unchanged until the operator opts in."""
+    reasons: list[str] = []
+    warnings: list[str] = []
+    if rf.min_oi > 0:
+        if metrics.oi is None:
+            reasons.append("open interest unavailable in quote/chain")
+        elif metrics.oi < rf.min_oi:
+            reasons.append(f"open interest {metrics.oi} below min {rf.min_oi}")
+    return reasons, warnings
+
+
 def _check_greeks(metrics: OptionQuoteMetrics, rf: RiskFilterConfig) -> tuple[list[str], list[str]]:
     """Delta/theta guard. Missing greeks block only when require_greeks is set,
     otherwise they are advisory so the filter never blocks on data we do not yet
@@ -557,8 +605,8 @@ def _check_iv(metrics: OptionQuoteMetrics, rf: RiskFilterConfig) -> tuple[list[s
 
 
 # Ordered so the recorded rejection reasons are deterministic: spread, then
-# liquidity, then greeks, then IV regime.
-_RISK_FILTER_CHECKS = (_check_spread, _check_volume, _check_greeks, _check_iv)
+# volume/open-interest liquidity, then greeks, then IV regime.
+_RISK_FILTER_CHECKS = (_check_spread, _check_volume, _check_open_interest, _check_greeks, _check_iv)
 
 
 def evaluate_option_risk_filters(
@@ -588,6 +636,7 @@ def evaluate_option_risk_filters(
             "max_spread_pct": str(risk_filter.max_spread_pct),
             "max_spread_rupees": str(risk_filter.max_spread_rupees),
             "min_volume": risk_filter.min_volume,
+            "min_oi": risk_filter.min_oi,
             "require_greeks": risk_filter.require_greeks,
             "min_abs_delta": str(risk_filter.min_abs_delta),
             "max_abs_theta": str(risk_filter.max_abs_theta),
@@ -610,6 +659,72 @@ def evaluate_option_risk_filters(
         warnings=warnings,
         raw=raw,
     )
+
+
+def parse_chain_signal_config(raw: Any) -> ChainSignalConfig:
+    """Parse the option-chain signal-gate block with safe advisory defaults."""
+    defaults = ChainSignalConfig()
+    if not isinstance(raw, dict):
+        return defaults
+    return ChainSignalConfig(
+        enabled=bool_from_config(raw.get("enabled"), default=defaults.enabled),
+        block_on_iv_regime_high=bool_from_config(raw.get("block_on_iv_regime_high"), default=defaults.block_on_iv_regime_high),
+        block_on_contradicting_oi=bool_from_config(raw.get("block_on_contradicting_oi"), default=defaults.block_on_contradicting_oi),
+        block_on_pcr_extreme=bool_from_config(raw.get("block_on_pcr_extreme"), default=defaults.block_on_pcr_extreme),
+        pcr_bullish_max=decimal_from_config(raw.get("pcr_bullish_max"), defaults.pcr_bullish_max),
+        pcr_bearish_min=decimal_from_config(raw.get("pcr_bearish_min"), defaults.pcr_bearish_min),
+    )
+
+
+def evaluate_chain_signals(*, direction: str, summary: dict[str, Any], cfg: ChainSignalConfig) -> ChainSignalDecision:
+    """Pure deterministic option-chain context gate for a long CE/PE entry.
+
+    No network/DB. Reads the latest chain summary (PCR, ATM IV regime, OI-buildup
+    label) and flags context that contradicts the trade direction. Each contradiction
+    is blocking only when its block_* flag is set, otherwise advisory (recorded as a
+    warning). Long options dislike a 'high' IV regime regardless of direction. A
+    'call_buildup' (call writing) contradicts a long CE; 'put_buildup' contradicts a
+    long PE. PCR skew is checked against the configured per-direction bounds."""
+    reasons: list[str] = []
+    warnings: list[str] = []
+    pcr = summary.get("pcr")
+    iv_regime = summary.get("iv_regime")
+    oi_label = summary.get("oi_buildup_label")
+    raw = {
+        "enabled": cfg.enabled,
+        "direction": direction,
+        "pcr": None if pcr is None else str(pcr),
+        "iv_regime": iv_regime,
+        "oi_buildup_label": oi_label,
+        "thresholds": {
+            "block_on_iv_regime_high": cfg.block_on_iv_regime_high,
+            "block_on_contradicting_oi": cfg.block_on_contradicting_oi,
+            "block_on_pcr_extreme": cfg.block_on_pcr_extreme,
+            "pcr_bullish_max": str(cfg.pcr_bullish_max),
+            "pcr_bearish_min": str(cfg.pcr_bearish_min),
+        },
+    }
+    if not cfg.enabled:
+        return ChainSignalDecision(allowed=True, reasons=[], warnings=[], raw=raw)
+
+    def route(blocking: bool, message: str) -> None:
+        (reasons if blocking else warnings).append(message)
+
+    if iv_regime == "high":
+        route(cfg.block_on_iv_regime_high, "ATM IV regime high — long-option premium expensive")
+
+    if direction == "CE" and oi_label == "call_buildup":
+        route(cfg.block_on_contradicting_oi, "call OI buildup (call writing) contradicts long CE")
+    elif direction == "PE" and oi_label == "put_buildup":
+        route(cfg.block_on_contradicting_oi, "put OI buildup (put writing) contradicts long PE")
+
+    if pcr is not None:
+        if direction == "CE" and cfg.pcr_bullish_max > 0 and pcr > cfg.pcr_bullish_max:
+            route(cfg.block_on_pcr_extreme, f"PCR {pcr} above {cfg.pcr_bullish_max} — heavy put writing/bearish skew vs long CE")
+        elif direction == "PE" and cfg.pcr_bearish_min > 0 and pcr < cfg.pcr_bearish_min:
+            route(cfg.block_on_pcr_extreme, f"PCR {pcr} below {cfg.pcr_bearish_min} — heavy call writing/bullish skew vs long PE")
+
+    return ChainSignalDecision(allowed=not reasons, reasons=reasons, warnings=warnings, raw=raw)
 
 
 def default_strategy_router() -> tuple[StrategyCardRule, ...]:
@@ -889,11 +1004,14 @@ def load_config(path: Path = DEFAULT_CONFIG) -> CampaignConfig:
         open_position_update_interval_minutes=int(data.get("open_position_update_interval_minutes", 5)),
         poll_interval_seconds=int(data.get("poll_interval_seconds", 15)),
         quote_stale_seconds=int(data.get("quote_stale_seconds", 90)),
+        chain_stale_seconds=int(data.get("chain_stale_seconds", 180)),
+        chain_selection_enabled=bool_from_config(data.get("chain_selection_enabled"), default=False),
         paper_only=True,
         live_orders_enabled=False,
         notes=str(data.get("notes", "BankNifty options paper campaign; no live orders.")),
         strategy_router=parse_strategy_router(data.get("strategy_router")),
         risk_filter=parse_risk_filter_config(data.get("risk_filter")),
+        chain_signals=parse_chain_signal_config(data.get("chain_signals")),
     )
 
 
@@ -992,6 +1110,37 @@ def select_directional_contract_candidates(
         if matches:
             result.append(sorted(matches, key=lambda c: c.symbol)[0])
     return result
+
+
+def rank_chain_candidates(
+    candidates: list[FyersOptionContract],
+    metrics_by_symbol: dict[str, dict[str, Any]],
+) -> list[FyersOptionContract]:
+    """Reorder ATM/OTM candidates by option-chain liquidity, most tradable first.
+
+    Pure and deterministic. Candidates with chain metrics sort ahead of those
+    without; among them the key prefers higher open interest then a tighter
+    bid/ask spread. The original index is the final tiebreak so the sort is stable
+    and ATM-first ordering is preserved on ties. When no candidate has metrics the
+    input order is returned unchanged (today's behavior)."""
+    if not any(metrics_by_symbol.get(c.symbol) for c in candidates):
+        return list(candidates)
+
+    def sort_key(item: tuple[int, FyersOptionContract]) -> tuple[int, Decimal, Decimal, int]:
+        idx, c = item
+        m = metrics_by_symbol.get(c.symbol)
+        if not m:
+            return (1, Decimal("0"), Decimal("0"), idx)
+        oi = m.get("oi")
+        oi_rank = Decimal(-int(oi)) if oi is not None else Decimal("0")  # higher OI first
+        bid, ask = m.get("bid"), m.get("ask")
+        if bid is not None and ask is not None:
+            spread = Decimal(str(ask)) - Decimal(str(bid))
+        else:
+            spread = Decimal("9999")  # unknown spread sinks below known-tight ones
+        return (0, oi_rank, spread, idx)
+
+    return [c for _, c in sorted(enumerate(candidates), key=sort_key)]
 
 
 def round_to_tick(value: Decimal, tick_size: Decimal) -> Decimal:
@@ -1562,6 +1711,84 @@ def get_quote(cur: psycopg.Cursor, symbol: str, stale_seconds: int) -> tuple[Dec
     stale = updated_at is None or (now - updated_at).total_seconds() > stale_seconds
     raw = row[8] if isinstance(row[8], dict) else {}
     return Decimal(str(row[0])), {"open": row[1], "high": row[2], "low": row[3], "close": row[4], "volume": row[5], "quote_time": row[6], "updated_at": updated_at, "raw": raw}, stale
+
+
+def get_chain_metrics(cur: psycopg.Cursor, symbol: str, stale_seconds: int) -> tuple[dict[str, Any], bool]:
+    """Latest option-chain greeks/IV/OI/bid-ask for one option symbol.
+
+    Read-only lookup of the most recent `market.option_chain_snapshots` row. Returns
+    a dict of only the present (non-null) fields plus a staleness flag. The keys are
+    chosen so parse_option_quote_metrics picks them up when merged into option_meta,
+    enabling the greeks/IV/OI risk guards. Empty dict when no chain row exists."""
+    cur.execute(
+        """
+        select bid, ask, volume, oi, delta, gamma, theta, vega, iv, snapshot_time
+        from market.option_chain_snapshots
+        where symbol=%s
+        order by snapshot_time desc
+        limit 1
+        """,
+        (symbol,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {}, True
+    snapshot_time = row[9]
+    now = datetime.now(timezone.utc)
+    stale = snapshot_time is None or (now - snapshot_time).total_seconds() > stale_seconds
+    fields = {
+        "bid": row[0], "ask": row[1], "volume": row[2], "oi": row[3],
+        "delta": row[4], "gamma": row[5], "theta": row[6], "vega": row[7], "iv": row[8],
+    }
+    return {k: v for k, v in fields.items() if v is not None}, stale
+
+
+def get_chain_summary(cur: psycopg.Cursor, underlying: str, stale_seconds: int) -> tuple[dict[str, Any], bool]:
+    """Latest option-chain summary (PCR / IV regime / OI buildup) for an underlying.
+
+    Reads the two most recent market.option_chain_summary rows so the OI-buildup
+    direction can be derived from the change in total CE vs PE open interest. Returns
+    a dict (pcr, iv_regime, oi_buildup_label, totals) plus a staleness flag. Empty
+    dict when no summary exists."""
+    cur.execute(
+        """
+        select snapshot_time, pcr, iv_regime, total_ce_oi, total_pe_oi, max_pain_strike, atm_iv
+        from market.option_chain_summary
+        where underlying=%s
+        order by snapshot_time desc
+        limit 2
+        """,
+        (underlying,),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return {}, True
+    latest = rows[0]
+    snapshot_time = latest[0]
+    now = datetime.now(timezone.utc)
+    stale = snapshot_time is None or (now - snapshot_time).total_seconds() > stale_seconds
+
+    oi_label: str | None = None
+    if len(rows) > 1 and latest[3] is not None and latest[4] is not None and rows[1][3] is not None and rows[1][4] is not None:
+        ce_change = int(latest[3]) - int(rows[1][3])
+        pe_change = int(latest[4]) - int(rows[1][4])
+        if ce_change == 0 and pe_change == 0:
+            oi_label = "flat"
+        elif pe_change > ce_change:
+            oi_label = "put_buildup"
+        else:
+            oi_label = "call_buildup"
+
+    summary = {
+        "pcr": latest[1],
+        "iv_regime": latest[2],
+        "total_ce_oi": latest[3],
+        "total_pe_oi": latest[4],
+        "max_pain_strike": latest[5],
+        "atm_iv": latest[6],
+        "oi_buildup_label": oi_label,
+    }
+    return summary, stale
 
 
 def current_campaign(cur: psycopg.Cursor, config: CampaignConfig) -> Campaign:
@@ -2410,11 +2637,43 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
             campaign = current_campaign(cur, config)
             selected_state: dict[str, Any] | None = None
             rejection_reasons: list[str] = []
-            for candidate_index, candidate in enumerate(candidates):
+            # Fresh option-chain greeks/IV/OI per candidate, sourced once and reused
+            # for both liquidity ranking and risk-filter enrichment. Empty when the
+            # chain ingester is absent/stale, so everything below falls back to
+            # today's quote-only behavior. atm_strike is the moneyness anchor so the
+            # ATM/OTM1 tag stays correct even after liquidity reordering.
+            atm_strike = nearest_strike(underlying_ltp, config.strike_step)
+            chain_metrics_by_symbol: dict[str, dict[str, Any]] = {}
+            for candidate in candidates:
+                fields, stale = get_chain_metrics(cur, candidate.symbol, config.chain_stale_seconds)
+                if fields and not stale:
+                    chain_metrics_by_symbol[candidate.symbol] = fields
+            if config.chain_selection_enabled:
+                candidates = rank_chain_candidates(candidates, chain_metrics_by_symbol)
+            # Option-chain context gate (PCR / IV regime / OI buildup). Advisory by
+            # default — only vetoes the entry when a contradiction's block_* flag is
+            # set and the summary is fresh. Recorded on the trade either way.
+            chain_signal_decision: ChainSignalDecision | None = None
+            if config.chain_signals.enabled:
+                chain_summary, chain_summary_stale = get_chain_summary(cur, config.underlying, config.chain_stale_seconds)
+                if chain_summary and not chain_summary_stale:
+                    chain_signal_decision = evaluate_chain_signals(
+                        direction=direction, summary=chain_summary, cfg=config.chain_signals
+                    )
+                    if not chain_signal_decision.allowed:
+                        return [] if quiet_no_change else lines + [
+                            "No trade: option-chain signal gate vetoed entry: " + "; ".join(chain_signal_decision.reasons)
+                        ]
+            for candidate in candidates:
                 option_ltp, option_meta, option_stale = get_quote(cur, candidate.symbol, config.quote_stale_seconds)
                 if option_ltp is None or option_stale:
                     rejection_reasons.append(f"{candidate.symbol}: option quote missing/stale")
                     continue
+                # Merge chain greeks/IV/OI into the quote so the risk filter's
+                # greeks/IV/OI guards can act on this candidate.
+                chain_fields = chain_metrics_by_symbol.get(candidate.symbol)
+                if chain_fields:
+                    option_meta = {**option_meta, **chain_fields}
                 if candidate.expiry == now_local.date() and now_local.time() >= dtime(13, 0) and (index_rel_volume is None or index_rel_volume < config.expiry_pm_min_relvol):
                     rejection_reasons.append(f"{candidate.symbol}: expiry-day PM rel-vol {index_rel_volume} below required {config.expiry_pm_min_relvol}")
                     continue
@@ -2442,8 +2701,9 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     get_recent_candles(cur, config.underlying_symbol, limit=max(6, config.beta_lookback_min), resolution="1"),
                     get_recent_candles(cur, candidate.symbol, limit=max(6, config.beta_lookback_min), resolution="1"),
                 )
+                is_atm = candidate.strike == atm_strike
                 if beta is None or beta <= 0:
-                    beta = config.beta_fallback_atm if candidate_index == 0 else config.beta_fallback_otm1
+                    beta = config.beta_fallback_atm if is_atm else config.beta_fallback_otm1
                 structure_stop_level = index_structure.stop_level if index_structure is not None else None
                 if structure_stop_level is None:
                     rejection_reasons.append(f"{candidate.symbol}: pullback structure stop unavailable")
@@ -2472,7 +2732,7 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                         "basis": "pullback_index_structure_beta_mapped",
                         "index_stop": str(structure_stop_level),
                         "observed_option_index_slope": str(beta),
-                        "candidate_rank": "ATM" if candidate_index == 0 else "OTM1",
+                        "candidate_rank": "ATM" if is_atm else "OTM1",
                     },
                 )
                 contract = candidate
@@ -2627,6 +2887,16 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                             }
                             if risk_decision is not None
                             else {"enabled": False}
+                        ),
+                        "chain_signal": (
+                            {
+                                "allowed": chain_signal_decision.allowed,
+                                "reasons": chain_signal_decision.reasons,
+                                "warnings": chain_signal_decision.warnings,
+                                "metrics": chain_signal_decision.raw,
+                            }
+                            if chain_signal_decision is not None
+                            else {"enabled": config.chain_signals.enabled}
                         ),
                     }),
                 ),

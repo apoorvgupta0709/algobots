@@ -39,3 +39,6 @@ pkg/
 
 # Hermes local state
 .hermes/
+
+# macOS
+.DS_Store

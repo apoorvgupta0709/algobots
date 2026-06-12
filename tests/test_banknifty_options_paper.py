@@ -30,6 +30,7 @@ from scripts.banknifty_options_paper import (
     parse_fyers_option_row,
     select_atm_contracts,
     select_directional_contract_candidates,
+    rank_chain_candidates,
     should_run_entry_scan,
     size_lots_by_risk,
     size_option_lots,
@@ -107,6 +108,45 @@ def test_select_directional_contract_candidates_returns_atm_then_one_otm_only() 
 
     assert [c.symbol for c in ce] == ["CE65400", "CE65500"]
     assert [c.symbol for c in pe] == ["PE65400", "PE65300"]
+
+
+def _chain_candidates() -> list:
+    return [
+        FyersOptionContract("CE65400", "BANKNIFTY", datetime(2026, 6, 30).date(), Decimal("65400"), "CE", 30, Decimal("0.05"), {}),
+        FyersOptionContract("CE65500", "BANKNIFTY", datetime(2026, 6, 30).date(), Decimal("65500"), "CE", 30, Decimal("0.05"), {}),
+    ]
+
+
+def test_rank_chain_candidates_promotes_higher_oi_then_tighter_spread() -> None:
+    candidates = _chain_candidates()  # ATM CE65400 first by default
+    metrics = {
+        "CE65400": {"oi": 40000, "bid": 100, "ask": 104},
+        "CE65500": {"oi": 90000, "bid": 80, "ask": 81},  # more liquid OTM
+    }
+    ranked = rank_chain_candidates(candidates, metrics)
+    assert [c.symbol for c in ranked] == ["CE65500", "CE65400"]
+
+
+def test_rank_chain_candidates_breaks_oi_ties_on_spread() -> None:
+    candidates = _chain_candidates()
+    metrics = {
+        "CE65400": {"oi": 50000, "bid": 100, "ask": 110},  # wide spread
+        "CE65500": {"oi": 50000, "bid": 100, "ask": 101},  # tight spread
+    }
+    ranked = rank_chain_candidates(candidates, metrics)
+    assert [c.symbol for c in ranked] == ["CE65500", "CE65400"]
+
+
+def test_rank_chain_candidates_unchanged_without_metrics() -> None:
+    candidates = _chain_candidates()
+    assert rank_chain_candidates(candidates, {}) == candidates
+
+
+def test_rank_chain_candidates_sinks_candidate_missing_metrics() -> None:
+    candidates = _chain_candidates()
+    metrics = {"CE65500": {"oi": 10000, "bid": 80, "ask": 81}}  # ATM has no chain row
+    ranked = rank_chain_candidates(candidates, metrics)
+    assert [c.symbol for c in ranked] == ["CE65500", "CE65400"]
 
 
 def test_size_option_lots_never_exceeds_max_premium_exposure() -> None:
@@ -648,6 +688,7 @@ def test_parse_risk_filter_config_uses_safe_paper_defaults() -> None:
     assert rf.max_spread_pct == Decimal("3.0")
     assert rf.max_spread_rupees == Decimal("5.0")
     assert rf.min_volume == 0
+    assert rf.min_oi == 0
     assert rf.require_greeks is False
     assert rf.min_abs_delta == Decimal("0.25")
     assert rf.max_abs_theta == Decimal("0")
@@ -727,6 +768,60 @@ def test_evaluate_option_risk_filters_rejects_missing_volume_when_volume_floor_c
 
     assert decision.allowed is False
     assert any("volume unavailable" in r for r in decision.reasons)
+
+
+def test_parse_risk_filter_config_reads_min_oi() -> None:
+    rf = bn.parse_risk_filter_config({"enabled": True, "min_oi": 50000})
+    assert rf.min_oi == 50000
+
+
+def test_option_quote_metrics_parses_open_interest_from_chain_keys() -> None:
+    # OI arrives merged into the quote meta from the option-chain snapshot.
+    metrics = bn.parse_option_quote_metrics({"bid": 99, "ask": 101, "oi": 75000})
+    assert metrics.oi == 75000
+    metrics_alt = bn.parse_option_quote_metrics({"open_interest": 12345})
+    assert metrics_alt.oi == 12345
+
+
+def test_evaluate_option_risk_filters_rejects_low_open_interest() -> None:
+    rf = bn.parse_risk_filter_config({"enabled": True, "min_oi": 50000, "min_abs_delta": 0})
+    meta = {"raw": {"v": {"bid": 99, "ask": 101, "oi": 1000}}}
+
+    decision = bn.evaluate_option_risk_filters(
+        option_ltp=Decimal("100"), option_meta=meta, option_type="CE", risk_filter=rf
+    )
+
+    assert decision.allowed is False
+    assert any("open interest" in r for r in decision.reasons)
+
+
+def test_evaluate_option_risk_filters_rejects_missing_oi_when_floor_configured() -> None:
+    rf = bn.parse_risk_filter_config({"enabled": True, "min_oi": 50000, "min_abs_delta": 0})
+    meta = {"raw": {"v": {"bid": 99, "ask": 101}}}
+
+    decision = bn.evaluate_option_risk_filters(
+        option_ltp=Decimal("100"), option_meta=meta, option_type="CE", risk_filter=rf
+    )
+
+    assert decision.allowed is False
+    assert any("open interest unavailable" in r for r in decision.reasons)
+
+
+def test_evaluate_option_risk_filters_allows_when_chain_metrics_satisfy_caps() -> None:
+    # With chain-sourced greeks/IV/OI merged in, the previously-dormant caps enforce
+    # and a healthy ATM option passes them all.
+    rf = bn.parse_risk_filter_config(
+        {"enabled": True, "min_oi": 50000, "min_abs_delta": 0.25, "max_iv": 30}
+    )
+    meta = {"raw": {"v": {"bid": 99, "ask": 101, "volume": 5000, "oi": 120000, "delta": 0.55, "iv": 18.0}}}
+
+    decision = bn.evaluate_option_risk_filters(
+        option_ltp=Decimal("100"), option_meta=meta, option_type="CE", risk_filter=rf
+    )
+
+    assert decision.allowed is True
+    assert decision.reasons == []
+    assert decision.raw["oi"] == 120000
 
 
 def test_evaluate_option_risk_filters_rejects_when_greeks_required_but_missing() -> None:
@@ -1286,3 +1381,89 @@ def test_load_config_reads_realistic_risk_fields(tmp_path: Path) -> None:
     assert config.target_r_multiple == Decimal("1.2")
     assert config.target_pct == Decimal("0.06")
     assert config.fixed_target_exit_enabled is False
+
+
+def test_parse_chain_signal_config_defaults_are_advisory() -> None:
+    cfg = bn.parse_chain_signal_config(None)
+    assert cfg.enabled is False
+    assert cfg.block_on_iv_regime_high is False
+    assert cfg.block_on_contradicting_oi is False
+    assert cfg.block_on_pcr_extreme is False
+    assert cfg.pcr_bullish_max == Decimal("0")
+    assert cfg.pcr_bearish_min == Decimal("0")
+
+
+def test_parse_chain_signal_config_reads_values() -> None:
+    cfg = bn.parse_chain_signal_config(
+        {"enabled": True, "block_on_iv_regime_high": True, "pcr_bullish_max": 1.5}
+    )
+    assert cfg.enabled is True
+    assert cfg.block_on_iv_regime_high is True
+    assert cfg.pcr_bullish_max == Decimal("1.5")
+
+
+def test_evaluate_chain_signals_disabled_allows_everything() -> None:
+    cfg = bn.parse_chain_signal_config({"enabled": False, "block_on_iv_regime_high": True})
+    summary = {"pcr": Decimal("3"), "iv_regime": "high", "oi_buildup_label": "call_buildup"}
+    decision = bn.evaluate_chain_signals(direction="CE", summary=summary, cfg=cfg)
+    assert decision.allowed is True
+    assert decision.reasons == []
+    assert decision.warnings == []
+
+
+def test_evaluate_chain_signals_high_iv_advisory_by_default() -> None:
+    cfg = bn.parse_chain_signal_config({"enabled": True})
+    summary = {"pcr": None, "iv_regime": "high", "oi_buildup_label": None}
+    decision = bn.evaluate_chain_signals(direction="CE", summary=summary, cfg=cfg)
+    assert decision.allowed is True
+    assert any("IV regime high" in w for w in decision.warnings)
+
+
+def test_evaluate_chain_signals_high_iv_blocks_when_configured() -> None:
+    cfg = bn.parse_chain_signal_config({"enabled": True, "block_on_iv_regime_high": True})
+    summary = {"pcr": None, "iv_regime": "high", "oi_buildup_label": None}
+    decision = bn.evaluate_chain_signals(direction="PE", summary=summary, cfg=cfg)
+    assert decision.allowed is False
+    assert any("IV regime high" in r for r in decision.reasons)
+
+
+def test_evaluate_chain_signals_contradicting_oi_blocks_when_configured() -> None:
+    cfg = bn.parse_chain_signal_config({"enabled": True, "block_on_contradicting_oi": True})
+    ce = bn.evaluate_chain_signals(
+        direction="CE",
+        summary={"pcr": None, "iv_regime": "normal", "oi_buildup_label": "call_buildup"},
+        cfg=cfg,
+    )
+    assert ce.allowed is False
+    assert any("call OI buildup" in r for r in ce.reasons)
+    # put_buildup does not contradict a long CE
+    ce_ok = bn.evaluate_chain_signals(
+        direction="CE",
+        summary={"pcr": None, "iv_regime": "normal", "oi_buildup_label": "put_buildup"},
+        cfg=cfg,
+    )
+    assert ce_ok.allowed is True
+
+
+def test_evaluate_chain_signals_pcr_extreme_blocks_when_configured() -> None:
+    cfg = bn.parse_chain_signal_config(
+        {"enabled": True, "block_on_pcr_extreme": True, "pcr_bullish_max": 1.5}
+    )
+    decision = bn.evaluate_chain_signals(
+        direction="CE",
+        summary={"pcr": Decimal("2.0"), "iv_regime": "normal", "oi_buildup_label": None},
+        cfg=cfg,
+    )
+    assert decision.allowed is False
+    assert any("PCR" in r for r in decision.reasons)
+
+
+def test_evaluate_chain_signals_aligned_context_passes_clean() -> None:
+    cfg = bn.parse_chain_signal_config(
+        {"enabled": True, "block_on_iv_regime_high": True, "block_on_contradicting_oi": True}
+    )
+    summary = {"pcr": Decimal("0.9"), "iv_regime": "low", "oi_buildup_label": "put_buildup"}
+    decision = bn.evaluate_chain_signals(direction="CE", summary=summary, cfg=cfg)
+    assert decision.allowed is True
+    assert decision.reasons == []
+    assert decision.warnings == []
