@@ -348,6 +348,12 @@ def run_ingestion(
         try:
             if embed is None and not dry_run:
                 embed = build_embedder(config.embedding_model, config.batch_size)
+                probe_dim = len(embed(["dimension probe"])[0])
+                if probe_dim != config.embedding_dim:
+                    raise RuntimeError(
+                        f"embedding model {config.embedding_model} returns"
+                        f" {probe_dim}-dim vectors; config expects {config.embedding_dim}"
+                    )
             for pdf_path in pdf_paths:
                 # Absolute path keys the source row; assumes ingestion always runs on the
                 # machine that owns the books directory (the VPS).

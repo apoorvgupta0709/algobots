@@ -167,10 +167,10 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    import psycopg
-
     args = parse_args(argv if argv is not None else sys.argv[1:])
     config = load_config()
+
+    import psycopg
 
     try:
         with psycopg.connect(

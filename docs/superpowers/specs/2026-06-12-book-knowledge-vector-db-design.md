@@ -80,7 +80,7 @@ the repo root locally and resolves to `/opt/data/finance-db/books/` on the VPS.
 
 ### 3. Ingestion CLI `scripts/ingest_books.py`
 
-`uv run python scripts/ingest_books.py [--books-dir books] [--reembed] [--dry-run]`
+`uv run python scripts/ingest_books.py [--books-dir books] [--dry-run]`
 
 Pipeline per PDF:
 
