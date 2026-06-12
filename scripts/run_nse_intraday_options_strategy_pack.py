@@ -71,6 +71,15 @@ def strategy_cost_rupees(strategy_id: str) -> Decimal:
     return Decimal("250") if strategy_id == "single_stock_momentum_index_confirm" else Decimal("120")
 
 
+def decimal_or_none(value) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
 def now_ist() -> datetime:
     return datetime.now(IST)
 
@@ -247,6 +256,14 @@ def simulate_proxy_trade(
     entry = signal.underlying_entry
     stop_underlying = entry * (Decimal("1") - sign * stop_pct)
     target_underlying = entry * (Decimal("1") + sign * stop_pct * target_r)
+    # The cards' real exits: a 5m close back through the broken level
+    # (structure_level) and a rupee premium stop. Both exit at the candle close
+    # with a proportional loss, so typical losses land well above the full -1R
+    # debit that the bare stop_pct hard stop charges.
+    structure_level = decimal_or_none(signal.metadata.get("structure_level"))
+    premium_stop_r: Decimal | None = None
+    if Decimal("0") < signal.stop_loss_rupees < risk:
+        premium_stop_r = -(signal.stop_loss_rupees / risk)
     exit_row = after[-1]
     pnl_r = Decimal("0")
     reason = "time_exit"
@@ -257,13 +274,24 @@ def simulate_proxy_trade(
             pnl_r = max(Decimal("-1"), min(target_r, move))
             reason = "time_exit"
             break
-        # Conservative stop-first ordering if both could trigger inside one candle.
+        # Conservative ordering inside one candle: disaster stop, then
+        # close-based stops, then target.
         stopped = row.low <= stop_underlying if sign > 0 else row.high >= stop_underlying
         targeted = row.high >= target_underlying if sign > 0 else row.low <= target_underlying
         if stopped:
             exit_row = row
             pnl_r = Decimal("-1")
             reason = "structure_stop"
+            break
+        close_r = sign * (row.close - entry) / (entry * stop_pct)
+        structure_hit = structure_level is not None and (
+            row.close < structure_level if sign > 0 else row.close > structure_level
+        )
+        premium_hit = premium_stop_r is not None and close_r <= premium_stop_r
+        if structure_hit or premium_hit:
+            exit_row = row
+            pnl_r = max(Decimal("-1"), min(target_r, close_r))
+            reason = "structure_close_stop" if structure_hit else "premium_stop"
             break
         if targeted:
             exit_row = row
@@ -327,9 +355,9 @@ def evaluate_day(day: date, data_by_symbol_day: dict[str, dict[date, list[Candle
         under = "NIFTY"
         symbol = SYMBOLS["NIFTY"]
         rows = nifty
-        if nifty and prev_nifty:
+        if "NIFTY" in cpr_cfg.underlyings and nifty and prev_nifty:
             sig = evaluate_cpr_trend_debit_spread(nifty, previous_day=prev_nifty, underlying="NIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("22"), lot_size=65, sessions_to_expiry=10, max_trade_loss=cpr_cfg.max_trade_loss)
-        if not sig and banknifty and prev_bank:
+        if not sig and "BANKNIFTY" in cpr_cfg.underlyings and banknifty and prev_bank:
             under = "BANKNIFTY"
             symbol = SYMBOLS["BANKNIFTY"]
             rows = banknifty
@@ -563,6 +591,15 @@ def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[
         sign = Decimal("1") if direction in {"long", "long_ce"} else Decimal("-1")
         stop_dec = Decimal(str(stop_underlying))
         target_dec = Decimal(str(target_underlying))
+        entry_dec = Decimal(str(entry))
+        risk_dec = Decimal(str(risk))
+        raw_dict = raw if isinstance(raw, dict) else {}
+        # Same card exits as the backtest: close back through the broken level
+        # and the rupee premium stop, both filled at the candle close.
+        structure_level = decimal_or_none(raw_dict.get("structure_level"))
+        stop_loss_rupees = decimal_or_none(raw_dict.get("stop_loss_rupees")) or Decimal("0")
+        premium_stop_r = -(stop_loss_rupees / risk_dec) if Decimal("0") < stop_loss_rupees < risk_dec else None
+        risk_per_point = abs(entry_dec - stop_dec)
         exit_reason = None
         exit_candle = candles[-1]
         pnl_r = Decimal("0")
@@ -572,6 +609,16 @@ def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[
             if stopped:
                 exit_reason = "structure_stop"
                 pnl_r = Decimal("-1")
+                exit_candle = candle
+                break
+            close_r = sign * (candle.close - entry_dec) / risk_per_point if risk_per_point > 0 else Decimal("0")
+            structure_hit = structure_level is not None and (
+                candle.close < structure_level if sign > 0 else candle.close > structure_level
+            )
+            premium_hit = premium_stop_r is not None and close_r <= premium_stop_r
+            if structure_hit or premium_hit:
+                exit_reason = "structure_close_stop" if structure_hit else "premium_stop"
+                pnl_r = max(Decimal("-1"), min(Decimal(str(target_r)), close_r))
                 exit_candle = candle
                 break
             if targeted:
@@ -698,7 +745,7 @@ def run_tick(config_path: Path, *, dry_run: bool = False, refresh: bool = False)
                 if Decimal(str(realized_today or 0)) <= -strat.max_daily_loss:
                     continue
                 raw = dict(sig.metadata)
-                raw.update({"stop_pct": str(stop_pct), "target_r": str(target_r), "time_exit": exit_t.isoformat(), "proxy_paper": True})
+                raw.update({"stop_pct": str(stop_pct), "target_r": str(target_r), "time_exit": exit_t.isoformat(), "proxy_paper": True, "stop_loss_rupees": str(sig.stop_loss_rupees)})
                 cur.execute(
                     """
                     insert into research.strategy_pack_paper_trades(

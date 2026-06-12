@@ -329,3 +329,113 @@ def test_tick_entry_guards_block_stale_signals_and_closed_windows():
     assert signal_is_fresh(now - timedelta(minutes=5), now)
     assert not signal_is_fresh(now - timedelta(hours=3), now)
     assert not signal_is_fresh(now + timedelta(minutes=5), now)
+
+
+def test_orb_exit_at_structure_close_loses_less_than_full_debit():
+    """Card exit: a 5m close back inside the OR exits proportionally, not at -1R."""
+    from scripts.run_nse_intraday_options_strategy_pack import simulate_proxy_trade
+
+    rows = [
+        c("09:15", "10000", "10020", "9980", "10000", 1000),
+        c("09:20", "10000", "10030", "9985", "10010", 1000),
+        c("09:25", "10010", "10040", "9990", "10020", 1000),
+        c("09:30", "10020", "10040", "10000", "10030", 1000),
+        c("09:35", "10030", "10040", "10010", "10030", 1000),
+        c("09:40", "10030", "10040", "10010", "10030", 1000),
+        c("09:45", "10030", "10050", "10030", "10045", 2200),  # breakout close just above OR high 10040
+        c("09:50", "10044", "10046", "10025", "10030", 900),  # closes back inside the OR; hard stop (10019.9) not hit
+    ]
+    signal = evaluate_nifty_orb_debit_spread(rows[:7], vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65)
+    assert signal is not None
+    assert signal.metadata.get("structure_level") == "10040"
+
+    trade = simulate_proxy_trade(
+        signal,
+        rows,
+        strategy_name="Nifty ORB Debit Spread",
+        underlying="NIFTY",
+        underlying_symbol="NSE:NIFTY50-INDEX",
+        stop_pct=Decimal("0.0025"),
+        target_r=Decimal("2"),
+        time_exit=time(13, 45),
+        cost_rupees=Decimal("120"),
+    )
+
+    assert trade is not None
+    assert trade.exit_reason == "structure_close_stop"
+    # Proportional loss (~-0.6R) instead of the full -1R debit.
+    assert Decimal("-0.95") < trade.pnl_r < Decimal("0")
+
+
+def test_premium_stop_exits_before_full_debit_loss():
+    from scripts.nse_intraday_options_strategy_pack import StrategySignal
+    from scripts.run_nse_intraday_options_strategy_pack import simulate_proxy_trade
+
+    signal = StrategySignal(
+        strategy_id="cpr_trend_debit_spread",
+        direction="long",
+        structure="bull_call_debit_spread",
+        entry_time=c("10:00", "10100", "10100", "10100", "10100").ts,
+        underlying_entry=Decimal("10100"),
+        reason="test",
+        max_loss_rupees=Decimal("1430"),
+        stop_loss_rupees=Decimal("1200"),
+        target_r=Decimal("2"),
+        metadata={"structure_level": "10000", "net_debit_per_share": "22", "lot_size": 65},
+    )
+    # Hard stop sits at 10074.75 (-1R); premium stop (-1200/1430 = -0.84R) is ~-21.2 points.
+    rows = [
+        c("10:00", "10100", "10100", "10100", "10100", 1000),
+        c("10:05", "10095", "10096", "10078", "10078.5", 1000),  # close_r ~ -0.85R, low above hard stop
+    ]
+
+    trade = simulate_proxy_trade(
+        signal,
+        rows,
+        strategy_name="CPR Trend-Day Debit Spread",
+        underlying="NIFTY",
+        underlying_symbol="NSE:NIFTY50-INDEX",
+        stop_pct=Decimal("0.0025"),
+        target_r=Decimal("2"),
+        time_exit=time(14, 45),
+        cost_rupees=Decimal("120"),
+    )
+
+    assert trade is not None
+    assert trade.exit_reason == "premium_stop"
+    assert Decimal("-0.95") < trade.pnl_r < Decimal("-0.7")
+
+
+def test_single_stock_signal_inherits_structure_level_from_stock_breakout():
+    stock_rows = make_orb_breakout_day("long")
+    index_rows = make_orb_breakout_day("long")
+
+    signal = evaluate_single_stock_momentum(
+        stock_rows,
+        index_rows,
+        stock_symbol="HDFCBANK",
+        confirming_index="BANKNIFTY",
+        vix=Decimal("16"),
+        option_spread_pct=Decimal("0.003"),
+        net_debit_per_share=Decimal("2.50"),
+        lot_size=550,
+        earnings_today=False,
+        stock_intraday_pct=Decimal("0.80"),
+        index_intraday_pct=Decimal("0.40"),
+    )
+
+    assert signal is not None
+    assert signal.metadata.get("structure_level") is not None
+
+
+def test_load_config_parses_cpr_underlyings_restriction(tmp_path: Path):
+    data = config_to_json_dict(build_default_config())
+    data["strategies"]["cpr_trend_debit_spread"]["underlyings"] = ["BANKNIFTY"]
+    config_path = tmp_path / "pack.json"
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+    cfg = load_config(config_path)
+
+    assert cfg.strategies["cpr_trend_debit_spread"].underlyings == ("BANKNIFTY",)
+    # Default stays both when the key is absent.
+    assert cfg.strategies["nifty_orb_debit_spread"].underlyings == ("NIFTY", "BANKNIFTY")
