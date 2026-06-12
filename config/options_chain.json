@@ -1,0 +1,11 @@
+{
+  "underlyings": [
+    "NSE:NIFTYBANK-INDEX",
+    "NSE:NIFTY50-INDEX"
+  ],
+  "strikecount": 10,
+  "snapshot_stale_seconds": 180,
+  "paper_only": true,
+  "live_orders_enabled": false,
+  "notes": "Read-only FYERS option-chain ingestion config. strikecount=10 stores ATM + 10 ITM + 10 OTM per side (CE & PE) per underlying per tick. snapshot_stale_seconds is the freshness budget the engine/dashboard use before treating chain data as unavailable. No order placement."
+}

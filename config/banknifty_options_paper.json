@@ -23,6 +23,8 @@
   "open_position_update_interval_minutes": 5,
   "poll_interval_seconds": 15,
   "quote_stale_seconds": 90,
+  "chain_stale_seconds": 180,
+  "chain_selection_enabled": false,
   "paper_only": true,
   "live_orders_enabled": false,
   "notes": "BankNifty Constituent-Led Pullback Continuation v2. Paper-only deterministic 5m entry / 15s monitor. Entry waits for constituent-led regime, confluence breakout leg, valid pullback/retest hold, then trigger candle continuation. Fixed targets disabled; exits use index structural SL, premium hard SL, R-based breakeven/MFE ratchet tuned to lock MFE - max(\u20b9300, 30% of MFE) from 1.0R, stagnation exit, and 15:20 force exit. No live FYERS orders.",
@@ -35,12 +37,22 @@
     "max_spread_pct": 3.0,
     "max_spread_rupees": 5.0,
     "min_volume": 0,
+    "min_oi": 0,
     "require_greeks": false,
     "min_abs_delta": 0,
     "max_abs_theta": 0,
     "max_iv": 0,
     "require_iv": false,
-    "notes": "Deterministic pre-entry option guardrail. Spread filter active. Greeks/IV caps stay disabled (min_abs_delta/max_abs_theta/max_iv = 0, require_greeks/require_iv false) until a greeks/IV data source is ingested. Paper-only; no live orders."
+    "notes": "Deterministic pre-entry option guardrail. Spread filter active. The greeks/IV/OI data source is now wired: scripts/ingest_fyers_optionchain.py populates market.option_chain_snapshots and the engine merges those metrics into each candidate quote before this filter runs. Caps ship DISABLED (min_oi/min_abs_delta/max_abs_theta/max_iv = 0, require_greeks/require_iv false) so behavior is unchanged until the chain ingester is confirmed live; these checks are fail-closed (a configured cap blocks when its metric is missing), so only flip them on once snapshots are reliably fresh. Suggested live values once enabled: min_oi ~50000, min_abs_delta 0.25, max_iv per IV regime. Paper-only; no live orders."
+  },
+  "chain_signals": {
+    "enabled": false,
+    "block_on_iv_regime_high": false,
+    "block_on_contradicting_oi": false,
+    "block_on_pcr_extreme": false,
+    "pcr_bullish_max": 0,
+    "pcr_bearish_min": 0,
+    "notes": "Option-chain context gate driven by market.option_chain_summary (PCR, ATM IV regime, OI buildup). Ships ADVISORY: enabled=false and every block_* flag false, so contradicting chain context is logged on the trade raw but never vetoes an entry. Promote individual checks to blocking (and set pcr bounds) only after observing the advisory logs across sessions. Long options dislike a 'high' IV regime; call_buildup contradicts long CE, put_buildup contradicts long PE. Paper-only; no live orders."
   },
   "constituent_weight_mode": "official_niftyindices_sectorial_data",
   "constituents": [

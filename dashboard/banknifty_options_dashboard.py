@@ -33,12 +33,14 @@ except Exception:  # pragma: no cover - dependency exists in project, fallback f
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROFILE_ROOT = Path("/opt/data/profiles/finance")
 CONFIG_PATH = PROJECT_ROOT / "config" / "banknifty_options_paper.json"
+OPTIONS_CHAIN_CONFIG_PATH = PROJECT_ROOT / "config" / "options_chain.json"
 JOBS_PATH = PROFILE_ROOT / "cron" / "jobs.json"
 DEFAULT_DB_PORT = "55432"
 DEFAULT_DATABASE_URL = "postgresql://" + "dashboard_ro@" + "127.0.0.1" + ":" + DEFAULT_DB_PORT + "/finance_tracker"
 MONITOR_JOB_NAME = "BankNifty options deterministic paper monitor: 5m entry / 15s open-trade monitor"
 HEARTBEAT_JOB_NAME = "BankNifty options LLM heartbeat: cron/script safety audit"
 DRIFT_GUARD_JOB_NAME = "BankNifty options script-only LLM drift guard"
+IST = ZoneInfo("Asia/Kolkata")
 
 @dataclass(frozen=True)
 class SafetyCheck:
@@ -58,6 +60,14 @@ def load_json_file(path: Path) -> dict[str, Any]:
         raise DashboardError(f"Missing file: {path}") from exc
     except json.JSONDecodeError as exc:
         raise DashboardError(f"Invalid JSON in {path}: {exc}") from exc
+
+
+def load_json_file_or_empty(path: Path) -> dict[str, Any]:
+    """Like load_json_file but tolerant of a missing/invalid optional config."""
+    try:
+        return load_json_file(path)
+    except DashboardError:
+        return {}
 
 
 def database_url() -> str:
@@ -269,6 +279,39 @@ def get_db_snapshot() -> dict[str, list[dict[str, Any]]]:
             """,
             [json.dumps(load_json_file(CONFIG_PATH).get("constituents") or [])],
         ),
+        "chain_summary": fetch_rows(
+            """
+            select distinct on (underlying)
+                   underlying, underlying_symbol, snapshot_time, expiry, spot, atm_strike,
+                   total_ce_oi, total_pe_oi, pcr, max_pain_strike, atm_iv, iv_regime,
+                   extract(epoch from (now() - snapshot_time)) as age_seconds
+            from market.option_chain_summary
+            order by underlying, snapshot_time desc
+            """
+        ),
+        "chain_ladder": fetch_rows(
+            """
+            with latest as (
+                select max(snapshot_time) as ts
+                from market.option_chain_snapshots
+                where underlying = %s
+            )
+            select s.strike,
+                   max(case when s.option_type='CE' then s.oi end) as ce_oi,
+                   max(case when s.option_type='CE' then s.iv end) as ce_iv,
+                   max(case when s.option_type='CE' then s.delta end) as ce_delta,
+                   max(case when s.option_type='CE' then s.ltp end) as ce_ltp,
+                   max(case when s.option_type='PE' then s.ltp end) as pe_ltp,
+                   max(case when s.option_type='PE' then s.delta end) as pe_delta,
+                   max(case when s.option_type='PE' then s.iv end) as pe_iv,
+                   max(case when s.option_type='PE' then s.oi end) as pe_oi
+            from market.option_chain_snapshots s, latest
+            where s.underlying = %s and s.snapshot_time = latest.ts
+            group by s.strike
+            order by s.strike
+            """,
+            ["BANKNIFTY", "BANKNIFTY"],
+        ),
     }
 
 
@@ -311,8 +354,8 @@ def main() -> None:  # pragma: no cover - exercised by Streamlit smoke import pl
     else:
         st.error("System safety checks failed. Do not trust paper-monitor output until fixed.")
 
-    tab_health, tab_live, tab_positions, tab_events, tab_equity, tab_cron = st.tabs([
-        "System health", "Live market", "Open position", "Events", "Equity", "Cron/config"
+    tab_health, tab_live, tab_chain, tab_positions, tab_events, tab_equity, tab_cron = st.tabs([
+        "System health", "Live market", "Options chain", "Open position", "Events", "Equity", "Cron/config"
     ])
 
     with tab_health:
@@ -345,6 +388,32 @@ def main() -> None:  # pragma: no cover - exercised by Streamlit smoke import pl
         st.metric("Fresh constituent coverage", f"{coverage_pct:.1f}%", f"{len(fresh)} / {len(constituents)}")
         st.subheader("Constituent movers")
         st.dataframe(constituents, use_container_width=True, hide_index=True)
+
+    with tab_chain:
+        chain_stale = int(load_json_file_or_empty(OPTIONS_CHAIN_CONFIG_PATH).get("snapshot_stale_seconds", 180))
+        summary_rows = snapshot["chain_summary"]
+        if not summary_rows:
+            st.info("No option-chain snapshots yet. Run scripts/ingest_fyers_optionchain.py during market hours.")
+        else:
+            st.subheader("Chain summary")
+            for srow in summary_rows:
+                fresh_label, fresh_detail = age_status(srow.get("age_seconds"), chain_stale)
+                st.markdown(f"**{srow.get('underlying')}** — expiry {srow.get('expiry')} · {fresh_label} ({fresh_detail})")
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                c1.metric("Spot", inr(srow.get("spot")))
+                c2.metric("ATM strike", str(srow.get("atm_strike") or "n/a"))
+                c3.metric("PCR (PE/CE OI)", str(srow.get("pcr") or "n/a"))
+                c4.metric("Max pain", str(srow.get("max_pain_strike") or "n/a"))
+                c5.metric("ATM IV", str(srow.get("atm_iv") or "n/a"))
+                c6.metric("IV regime", str(srow.get("iv_regime") or "n/a"))
+
+            ladder = snapshot["chain_ladder"]
+            st.subheader("BankNifty strike ladder (latest snapshot)")
+            if not ladder:
+                st.info("No BankNifty ladder rows in the latest snapshot.")
+            else:
+                st.caption("CE OI / IV / Δ  |  strike  |  PE OI / IV / Δ")
+                st.dataframe(ladder, use_container_width=True, hide_index=True)
 
     with tab_positions:
         open_trades = snapshot["open_trades"]
