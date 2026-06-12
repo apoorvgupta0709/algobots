@@ -23,7 +23,7 @@ create table if not exists knowledge.embedding_runs (
     embedding_dim integer not null,
     sources_processed integer not null default 0,
     chunks_embedded integer not null default 0,
-    chunks_skipped integer not null default 0,
+    sources_skipped integer not null default 0,
     status text not null default 'running' check (status in ('running', 'success', 'error')),
     error_text text,
     raw jsonb not null default '{}'::jsonb,

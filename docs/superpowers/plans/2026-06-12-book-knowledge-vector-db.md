@@ -105,7 +105,7 @@ create table if not exists knowledge.embedding_runs (
     embedding_dim integer not null,
     sources_processed integer not null default 0,
     chunks_embedded integer not null default 0,
-    chunks_skipped integer not null default 0,
+    sources_skipped integer not null default 0,
     status text not null default 'running' check (status in ('running', 'success', 'error')),
     error_text text,
     raw jsonb not null default '{}'::jsonb,
@@ -551,7 +551,7 @@ def finish_run(
         cur.execute(
             "update knowledge.embedding_runs"
             " set status = %s, error_text = %s, sources_processed = %s,"
-            "     chunks_embedded = %s, chunks_skipped = %s, raw = %s,"
+            "     chunks_embedded = %s, sources_skipped = %s, raw = %s,"
             "     finished_at = now()"
             " where run_id = %s",
             (
