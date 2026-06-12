@@ -46,7 +46,7 @@ are config values, not hardcoded.
 
 ## Components
 
-### 1. Migration `migrations/012_knowledge_embeddings.sql`
+### 1. Migration `migrations/014_knowledge_embeddings.sql`
 
 Idempotent, applied via the existing `psql.sh` flow:
 
@@ -197,6 +197,6 @@ Hermes ──► query_knowledge.py "question" --json
   produces each book once (second run reports skips).
 - `query_knowledge.py "position sizing" --json` returns top-k chunks with
   correct page citations from the ingested books.
-- Migration applies cleanly on a database that already has migrations 001–011.
+- Migration applies cleanly on a database that already has migrations 001–012.
 - No config or code path enables live orders; dashboard role remains
   SELECT-only.

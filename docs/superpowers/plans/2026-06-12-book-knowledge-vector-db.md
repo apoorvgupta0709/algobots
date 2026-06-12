@@ -10,7 +10,7 @@
 
 **Conventions that bind every task:** `from __future__ import annotations`, dataclasses, full type hints, config-driven thresholds (no hardcoded numbers in logic), no FYERS/LLM calls anywhere in this feature, no live-order code, tests need no DB and no model download. Run all commands from the repo root: `/Users/apoorvgupta/Desktop/Itarang Files/itarang code/algobot`.
 
-**Note on migration numbering:** the latest migration is `012_nse_intraday_options_strategy_pack.sql`, so the new migration is **013** (the spec text says 012; Task 2 fixes the spec).
+**Note on migration numbering:** the latest migration is `012_nse_intraday_options_strategy_pack.sql`, so the new migration is **014** (013 is taken by a parallel options-chain work-in-progress in this checkout) (the spec text says 012; Task 2 fixes the spec).
 
 ---
 
@@ -69,15 +69,15 @@ git commit -m "feat: add knowledge ingestion config and embedding deps"
 
 ---
 
-### Task 2: Migration 013 — pgvector + FTS on knowledge.chunks
+### Task 2: Migration 014 — pgvector + FTS on knowledge.chunks
 
 **Files:**
-- Create: `migrations/013_knowledge_embeddings.sql`
-- Modify: `docs/superpowers/specs/2026-06-12-book-knowledge-vector-db-design.md` (012 → 013)
+- Create: `migrations/014_knowledge_embeddings.sql`
+- Modify: `docs/superpowers/specs/2026-06-12-book-knowledge-vector-db-design.md` (012 → 014)
 
 - [ ] **Step 1: Write the migration**
 
-Create `migrations/013_knowledge_embeddings.sql`:
+Create `migrations/014_knowledge_embeddings.sql`:
 
 ```sql
 -- Phase 3 book knowledge: pgvector embeddings + full-text search on chunks.
@@ -126,12 +126,12 @@ $$;
 
 - [ ] **Step 2: Fix the migration number in the spec**
 
-In `docs/superpowers/specs/2026-06-12-book-knowledge-vector-db-design.md`, replace the string `012_knowledge_embeddings.sql` with `013_knowledge_embeddings.sql` (one occurrence in the "Components" section heading; also replace the bare reference `migration `012`` if present elsewhere).
+In `docs/superpowers/specs/2026-06-12-book-knowledge-vector-db-design.md`, replace the string `012_knowledge_embeddings.sql` with `014_knowledge_embeddings.sql` (one occurrence in the "Components" section heading; also replace the bare reference `migration `012`` if present elsewhere).
 
 - [ ] **Step 3: Syntax-check the migration if a local Postgres is available**
 
 If local Postgres is running (`./scripts/start-postgres.sh` works in this checkout):
-Run: `./scripts/psql.sh -f migrations/013_knowledge_embeddings.sql`
+Run: `./scripts/psql.sh -f migrations/014_knowledge_embeddings.sql`
 Expected: completes without error (or fails ONLY on `create extension vector` if pgvector binaries are absent locally — that is acceptable; the VPS install is Task 3).
 
 If no local Postgres: skip — the file is plain idempotent DDL matching migration 001's style; it gets applied on the VPS at deploy time.
@@ -139,8 +139,8 @@ If no local Postgres: skip — the file is plain idempotent DDL matching migrati
 - [ ] **Step 4: Commit**
 
 ```bash
-git add migrations/013_knowledge_embeddings.sql docs/superpowers/specs/2026-06-12-book-knowledge-vector-db-design.md
-git commit -m "feat: add migration 013 - pgvector embeddings + FTS for knowledge.chunks"
+git add migrations/014_knowledge_embeddings.sql docs/superpowers/specs/2026-06-12-book-knowledge-vector-db-design.md
+git commit -m "feat: add migration 014 - pgvector embeddings + FTS for knowledge.chunks"
 ```
 
 ---
@@ -158,7 +158,7 @@ Create `scripts/install_pgvector.sh` (mode 755). It targets the VPS's extracted-
 #!/usr/bin/env bash
 # Idempotent pgvector install for the extracted-pgroot PostgreSQL 17 deploy.
 # Run ON THE VPS as a user that can read apt archives. Read-only against the DB
-# except for making the extension available; migration 013 actually creates it.
+# except for making the extension available; migration 014 actually creates it.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1047,14 +1047,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except psycopg.errors.UndefinedColumn:
         print(
             "ERROR: knowledge.chunks has no embedding/tsv columns."
-            " Apply migrations/013_knowledge_embeddings.sql first.",
+            " Apply migrations/014_knowledge_embeddings.sql first.",
             file=sys.stderr,
         )
         return 2
     except psycopg.errors.UndefinedObject:
         print(
             "ERROR: pgvector extension missing."
-            " Run scripts/install_pgvector.sh, then migration 013.",
+            " Run scripts/install_pgvector.sh, then migration 014.",
             file=sys.stderr,
         )
         return 2
@@ -1216,9 +1216,9 @@ Append (or slot near the other usage sections):
 Drop trading-book PDFs into `books/` (VPS: `/opt/data/finance-db/books/`), then:
 
 ​```bash
-# one-time on the VPS: make pgvector available, then apply migration 013
+# one-time on the VPS: make pgvector available, then apply migration 014
 ./scripts/install_pgvector.sh
-./scripts/psql.sh -f migrations/013_knowledge_embeddings.sql
+./scripts/psql.sh -f migrations/014_knowledge_embeddings.sql
 
 # ingest (idempotent — re-running skips unchanged books)
 uv run python scripts/ingest_books.py
@@ -1259,7 +1259,7 @@ Not executable from this checkout; listed for completeness so nothing is forgott
 
 1. `git pull` the repo on the VPS (`/opt/data/finance-db`), `uv sync`.
 2. `./scripts/install_pgvector.sh`
-3. `./scripts/psql.sh -f migrations/013_knowledge_embeddings.sql`
+3. `./scripts/psql.sh -f migrations/014_knowledge_embeddings.sql`
 4. `mkdir -p /opt/data/finance-db/books` and upload PDFs.
 5. `uv run python scripts/ingest_books.py`
 6. Smoke test: `uv run python scripts/query_knowledge.py "risk management" --top-k 3`
