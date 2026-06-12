@@ -212,6 +212,28 @@ uv run python scripts/run_watchlist_daily_report.py \
 
 This orchestrator is also read-only: it only ingests market data, computes research factors, and writes Markdown reports. It has no order-placement or execution path.
 
+## Book knowledge base
+
+Drop trading-book PDFs into `books/` (VPS: `/opt/data/finance-db/books/`), then:
+
+```bash
+# one-time on the VPS: make pgvector available, then apply migration 014
+./scripts/install_pgvector.sh
+./scripts/psql.sh -f migrations/014_knowledge_embeddings.sql
+
+# ingest (idempotent — re-running skips unchanged books)
+uv run python scripts/ingest_books.py
+
+# search with citations (read-only; --json for agents)
+uv run python scripts/query_knowledge.py "position sizing for index options" --top-k 8
+```
+
+Embeddings are computed locally (BAAI/bge-small-en-v1.5 on CPU; first run
+downloads the model to `~/.cache`). Image-only/scanned PDFs are registered
+with `needs_ocr` and skipped. Config: `config/knowledge_ingestion.json`.
+Workflow from book knowledge to a live-trading shortlist:
+`docs/plans/book-to-live-strategy-playbook.md`.
+
 ## Roadmap
 
 Full roadmap with done/pending status:

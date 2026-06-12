@@ -106,6 +106,8 @@ def format_citation(hit: SearchHit) -> str:
 def run_search(
     conn, query_text: str, query_vector: Sequence[float], top_k: int, book: str | None
 ) -> list[SearchHit]:
+    if top_k <= 0:
+        return []
     candidates = top_k * CANDIDATE_MULTIPLIER
     params: dict = {
         "query_text": query_text,
@@ -113,7 +115,8 @@ def run_search(
         "limit": candidates,
     }
     if book:
-        params["book"] = f"%{book}%"
+        escaped = book.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        params["book"] = f"%{escaped}%"
 
     with conn.cursor() as cur:
         cur.execute(vector_search_sql(book_filter=bool(book)), params)
@@ -164,17 +167,17 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    import psycopg
-
     args = parse_args(argv if argv is not None else sys.argv[1:])
     config = load_config()
-    embed = build_embedder(config.embedding_model, config.batch_size)
-    query_vector = embed([config.query_prefix + args.query])[0]
+
+    import psycopg
 
     try:
         with psycopg.connect(
             args.database_url, options="-c default_transaction_read_only=on"
         ) as conn:
+            embed = build_embedder(config.embedding_model, config.batch_size)
+            query_vector = embed([config.query_prefix + args.query])[0]
             hits = run_search(conn, args.query, query_vector, args.top_k, args.book)
     except (psycopg.errors.UndefinedColumn, psycopg.errors.UndefinedTable):
         print(
@@ -189,6 +192,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             " Run scripts/install_pgvector.sh, then migration 014.",
             file=sys.stderr,
         )
+        return 2
+    except psycopg.OperationalError as exc:
+        print(f"ERROR: cannot connect to database: {exc}", file=sys.stderr)
         return 2
 
     if args.as_json:
