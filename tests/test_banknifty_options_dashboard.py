@@ -133,3 +133,69 @@ def test_dashboard_runner_refuses_external_bind_without_explicit_ack():
 
     assert result.returncode != 0
     assert "refusing external dashboard bind" in result.stdout.lower()
+
+
+# --- control plane: PIN + submission validation --------------------------------
+
+import importlib.util as _ilu
+
+_CP_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "control_plane.py"
+_cp_spec = _ilu.spec_from_file_location("dashboard_control_plane", _CP_PATH)
+control_plane = _ilu.module_from_spec(_cp_spec)
+assert _cp_spec and _cp_spec.loader
+sys.modules["dashboard_control_plane"] = control_plane
+_cp_spec.loader.exec_module(control_plane)
+
+
+def test_read_path_still_rejects_writes_after_control_plane() -> None:
+    for sql in (
+        "insert into research.control_requests (requested_by) values ('x')",
+        "update research.control_state set paused=true",
+        "select 1; insert into research.control_requests values (1)",
+    ):
+        with pytest.raises(dashboard.DashboardError):
+            dashboard.assert_readonly_sql(sql)
+
+
+def test_submit_control_request_rejects_bad_inputs_before_any_sql() -> None:
+    with pytest.raises(control_plane.ControlPlaneError):
+        control_plane.submit_control_request(
+            engine="not_an_engine", action_type="engine_pause", payload={}, requested_by="t"
+        )
+    with pytest.raises(control_plane.ControlPlaneError):
+        control_plane.submit_control_request(
+            engine="banknifty_options_paper", action_type="drop_table", payload={}, requested_by="t"
+        )
+    with pytest.raises(control_plane.ControlPlaneError):
+        control_plane.submit_control_request(
+            engine="banknifty_options_paper", action_type="engine_pause", payload=[], requested_by="t"  # type: ignore[arg-type]
+        )
+    with pytest.raises(control_plane.ControlPlaneError):
+        control_plane.submit_control_request(
+            engine="banknifty_options_paper", action_type="engine_pause", payload={}, requested_by="  "
+        )
+
+
+def test_verify_pin_fails_closed_when_env_unset(monkeypatch) -> None:
+    monkeypatch.delenv(control_plane.PIN_ENV_VAR, raising=False)
+    assert control_plane.control_pin_configured() is False
+    assert control_plane.verify_pin("anything") is False
+    assert control_plane.verify_pin("") is False
+
+
+def test_verify_pin_constant_time_match(monkeypatch) -> None:
+    monkeypatch.setenv(control_plane.PIN_ENV_VAR, "secret-pin")
+    assert control_plane.control_pin_configured() is True
+    assert control_plane.verify_pin("secret-pin") is True
+    assert control_plane.verify_pin("wrong") is False
+    assert control_plane.verify_pin("") is False
+
+
+def test_strategy_toggle_options_lists_both_engines() -> None:
+    config = {"strategy_router": [{"id": "s1", "name": "S1", "enabled": True, "paper_trade_enabled": True}]}
+    pack = {"strategies": {"p1": {"name": "P1", "enabled": False, "paper_trade_enabled": False}}}
+    options = dashboard.strategy_toggle_options(config, pack)
+    assert [(o["engine"], o["strategy_id"], o["enabled"]) for o in options] == [
+        ("banknifty_options_paper", "s1", True),
+        ("nse_intraday_options_strategy_pack", "p1", False),
+    ]

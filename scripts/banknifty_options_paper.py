@@ -1882,6 +1882,102 @@ def has_open_option_trade(config: CampaignConfig) -> bool:
             return bool(cur.fetchone()[0])
 
 
+ENGINE_CONTROL_NAME = "banknifty_options_paper"
+
+
+def control_state_paused(cur: psycopg.Cursor, engine: str = ENGINE_CONTROL_NAME) -> bool:
+    """True when the dashboard control plane paused this engine.
+
+    Pausing stops new paper entries only; open positions keep being managed
+    (stop ratchet, stagnation, force-exit at session close). Missing control
+    tables (migration 015 not applied) never block the engine.
+    """
+    cur.execute("select to_regclass('research.control_state')")
+    if cur.fetchone()[0] is None:
+        return False
+    cur.execute("select paused from research.control_state where engine=%s", (engine,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def partition_force_exit_claims(
+    rows: list[tuple[int, Any]],
+    open_trade_ids: set[int],
+) -> tuple[dict[int, int], list[tuple[int, str]]]:
+    """Split pending force-exit request rows into claims and rejections.
+
+    rows are (request_id, payload) oldest first. Returns ({trade_id: request_id},
+    [(request_id, reject_message), ...]). Requests for trades that are not open
+    in this campaign are rejected, and duplicates for the same trade are
+    rejected so one operator click can never close twice.
+    """
+    claims: dict[int, int] = {}
+    rejects: list[tuple[int, str]] = []
+    for request_id, payload in rows:
+        payload = payload if isinstance(payload, dict) else {}
+        raw_trade_id = payload.get("trade_id")
+        try:
+            trade_id = int(raw_trade_id)
+        except (TypeError, ValueError):
+            rejects.append((int(request_id), f"invalid trade_id {raw_trade_id!r}"))
+            continue
+        if trade_id not in open_trade_ids:
+            rejects.append((int(request_id), f"trade {trade_id} is not an open paper trade of this campaign"))
+            continue
+        if trade_id in claims:
+            rejects.append((int(request_id), f"duplicate force-exit request for trade {trade_id}"))
+            continue
+        claims[trade_id] = int(request_id)
+    return claims, rejects
+
+
+def evaluate_manual_force_exit(
+    *,
+    entry_premium: Decimal,
+    ltp: Decimal | None,
+    quantity: int,
+) -> tuple[Decimal, Decimal]:
+    """Exit premium and paper P&L for an operator-requested flatten.
+
+    The operator asked to flatten, so we close even on a stale quote (noted in
+    the audit message); with no stored quote at all we close at entry premium
+    (breakeven) rather than inventing a price.
+    """
+    exit_premium = ltp if ltp is not None else entry_premium
+    pnl = ((exit_premium - entry_premium) * Decimal(quantity)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+    return exit_premium, pnl
+
+
+def claim_force_exit_requests(cur: psycopg.Cursor, open_trade_ids: set[int]) -> dict[int, int]:
+    """Claim today's pending force-exit requests for this engine's open trades.
+
+    Runs inside the monitor transaction (FOR UPDATE SKIP LOCKED) so a request is
+    honored exactly once. Requests from previous IST days are never claimed; the
+    control applier expires those.
+    """
+    cur.execute("select to_regclass('research.control_requests')")
+    if cur.fetchone()[0] is None:
+        return {}
+    cur.execute(
+        """
+        select request_id, payload
+        from research.control_requests
+        where engine = %s and action_type = 'force_exit' and status = 'pending'
+          and (requested_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date
+        order by requested_at, request_id
+        for update skip locked
+        """,
+        (ENGINE_CONTROL_NAME,),
+    )
+    claims, rejects = partition_force_exit_claims(cur.fetchall(), open_trade_ids)
+    for request_id, message in rejects:
+        cur.execute(
+            "update research.control_requests set status='rejected', processed_at=now(), result_message=%s where request_id=%s",
+            (message, request_id),
+        )
+    return claims
+
+
 def pct_from_open(ltp: Decimal, quote_meta: dict[str, Any]) -> tuple[Decimal | None, Decimal | None, str | None]:
     open_value = quote_meta.get("open")
     if open_value is None:
@@ -2477,6 +2573,8 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
     with connect_db() as conn:
         with conn.cursor() as cur:
             campaign = current_campaign(cur, config)
+            if control_state_paused(cur):
+                return [] if quiet_no_change else lines + ["Engine paused via dashboard control plane; no new paper entries (open positions stay managed)."]
             open_count, trades_today, realized_today = trade_counts(cur, campaign)
             now_local = now_ist()
             if now_local.time() < config.no_new_trades_before.replace(tzinfo=None):
@@ -2945,6 +3043,7 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
     now = datetime.now(timezone.utc)
     with connect_db() as conn:
         with conn.cursor() as cur:
+            force_exit_claims = claim_force_exit_requests(cur, {int(row[0]) for row in trades})
             for trade_id, symbol, option_type, entry, stop, target, quantity, highest, entry_time, underlying_symbol, raw in trades:
                 trade_raw = raw if isinstance(raw, dict) else {}
                 index_structure_raw = trade_raw.get("index_structure") if isinstance(trade_raw.get("index_structure"), dict) else {}
@@ -2954,6 +3053,33 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                 target_dec = Decimal(str(target))
                 qty = int(quantity)
                 ltp, quote_meta, stale = get_quote(cur, str(symbol), config.quote_stale_seconds)
+                force_request_id = force_exit_claims.get(int(trade_id))
+                if force_request_id is not None:
+                    exit_premium, pnl = evaluate_manual_force_exit(entry_premium=entry_dec, ltp=ltp, quantity=qty)
+                    quote_note = " Quote was missing/stale; closed at last stored premium." if (ltp is None or stale) else ""
+                    cur.execute(
+                        """
+                        update research.option_paper_trades
+                        set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
+                            exit_reason='manual_force_exit', updated_at=now()
+                        where option_trade_id=%s
+                        """,
+                        (exit_premium, pnl, trade_id),
+                    )
+                    insert_event(
+                        cur,
+                        int(trade_id),
+                        "paper_option_closed_manual_force_exit",
+                        exit_premium,
+                        qty,
+                        f"Closed by operator force-exit from the dashboard; exit {money(exit_premium)}; paper P&L {money(pnl)}.{quote_note} No live order.",
+                    )
+                    cur.execute(
+                        "update research.control_requests set status='applied', processed_at=now(), result_message=%s where request_id=%s",
+                        (f"closed trade {trade_id} at {exit_premium}; paper P&L {pnl}; quote_stale={bool(ltp is None or stale)}", force_request_id),
+                    )
+                    action_lines.append(f"- {symbol}: closed by manual force-exit; exit {money(exit_premium)}; paper P&L {money(pnl)}")
+                    continue
                 if ltp is None or stale:
                     reason, exit_premium, pnl = evaluate_stale_quote_force_exit(
                         entry_premium=entry_dec,

@@ -658,6 +658,124 @@ def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[
     return closed
 
 
+PACK_ENGINE_NAME = "nse_intraday_options_strategy_pack"
+
+
+def pack_engine_paused(conn: psycopg.Connection) -> bool:
+    """True when the dashboard control plane paused this engine.
+
+    Pausing stops new paper entries only; open proxy trades keep being managed.
+    Missing control tables (migration 015 not applied) never block the engine.
+    """
+    with conn.cursor() as cur:
+        cur.execute("select to_regclass('research.control_state')")
+        if cur.fetchone()[0] is None:
+            return False
+        cur.execute("select paused from research.control_state where engine=%s", (PACK_ENGINE_NAME,))
+        row = cur.fetchone()
+        return bool(row and row[0])
+
+
+def proxy_force_exit_pnl_r(*, direction: str, exit_underlying: Decimal, entry: Decimal, stop: Decimal, target_r: Decimal) -> Decimal:
+    """Proxy R multiple for an operator-requested flatten — same clamp as the
+    scheduled exit paths: floor -1R at the stop, ceiling target_r."""
+    sign = Decimal("1") if direction in {"long", "long_ce"} else Decimal("-1")
+    risk_points = abs(entry - stop)
+    if risk_points == 0:
+        return Decimal("0")
+    move = sign * (exit_underlying - entry) / risk_points
+    return max(Decimal("-1"), min(target_r, move))
+
+
+def apply_force_exit_requests(conn: psycopg.Connection, campaign_id: int) -> list[dict[str, Any]]:
+    """Claim today's pending dashboard force-exit requests and close those trades.
+
+    Closes at the latest stored 5m candle close (entry price when no candle
+    exists, i.e. breakeven before costs), with the same cost model as every
+    other exit. Requests for trades that are not open in this campaign are
+    rejected. Requests from previous IST days are never claimed; the control
+    applier expires those.
+    """
+    with conn.cursor() as cur:
+        cur.execute("select to_regclass('research.control_requests')")
+        if cur.fetchone()[0] is None:
+            return []
+        cur.execute(
+            """
+            select request_id, payload
+            from research.control_requests
+            where engine = %s and action_type = 'force_exit' and status = 'pending'
+              and (requested_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date
+            order by requested_at, request_id
+            for update skip locked
+            """,
+            (PACK_ENGINE_NAME,),
+        )
+        requests = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for request_id, payload in requests:
+        payload = payload if isinstance(payload, dict) else {}
+        trade_id: int | None
+        try:
+            trade_id = int(payload.get("trade_id"))
+        except (TypeError, ValueError):
+            trade_id = None
+        status, message = "rejected", f"invalid trade_id {payload.get('trade_id')!r}"
+        if trade_id is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select strategy_id, underlying_symbol, direction, entry_underlying, risk_rupees,
+                           stop_underlying, target_r, entry_time
+                    from research.strategy_pack_paper_trades
+                    where pack_trade_id=%s and campaign_id=%s and status='open'
+                    for update
+                    """,
+                    (trade_id, campaign_id),
+                )
+                trade = cur.fetchone()
+            if trade is None:
+                status, message = "rejected", f"trade {trade_id} is not an open paper trade of this campaign"
+            else:
+                sid, symbol, direction, entry, risk, stop_underlying, target_r, entry_time = trade
+                candles = todays_candles_for_symbol(conn, symbol, after=entry_time)
+                exit_underlying = candles[-1].close if candles else Decimal(str(entry))
+                pnl_r = proxy_force_exit_pnl_r(
+                    direction=str(direction),
+                    exit_underlying=exit_underlying,
+                    entry=Decimal(str(entry)),
+                    stop=Decimal(str(stop_underlying)),
+                    target_r=Decimal(str(target_r)),
+                )
+                pnl = q2(Decimal(str(risk)) * pnl_r - strategy_cost_rupees(sid))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        update research.strategy_pack_paper_trades
+                        set status='closed', exit_time=now(), exit_underlying=%s, realized_pnl=%s,
+                            exit_reason='manual_force_exit', updated_at=now()
+                        where pack_trade_id=%s and status='open'
+                        """,
+                        (exit_underlying, pnl, trade_id),
+                    )
+                    cur.execute(
+                        """
+                        insert into research.strategy_pack_paper_trade_events(pack_trade_id, event_type, message, raw)
+                        values (%s, 'closed', %s, %s::jsonb)
+                        """,
+                        (trade_id, f"Closed {sid} by manual_force_exit from the dashboard; proxy_pnl={pnl}", json.dumps({"pnl_r": str(pnl_r), "exit_underlying": str(exit_underlying), "had_candle": bool(candles)}, default=str)),
+                    )
+                status = "applied"
+                message = f"closed trade {trade_id} at underlying {exit_underlying}; proxy P&L {pnl}"
+                out.append({"event": "closed", "trade_id": trade_id, "strategy_id": sid, "exit_reason": "manual_force_exit", "pnl": str(pnl)})
+        with conn.cursor() as cur:
+            cur.execute(
+                "update research.control_requests set status=%s, processed_at=now(), result_message=%s where request_id=%s",
+                (status, message, request_id),
+            )
+    return out
+
+
 def stop_target_from_signal(sig: StrategySignal, stop_pct: Decimal, target_r: Decimal) -> tuple[Decimal, Decimal]:
     sign = Decimal("1") if sig.direction in {"long", "long_ce"} else Decimal("-1")
     stop = sig.underlying_entry * (Decimal("1") - sign * stop_pct)
@@ -691,6 +809,11 @@ def run_tick(config_path: Path, *, dry_run: bool = False, refresh: bool = False)
         campaign_id = upsert_campaign(conn, cfg, config_path)
         if not dry_run:
             out.extend(close_open_proxy_trades(conn, campaign_id))
+            out.extend(apply_force_exit_requests(conn, campaign_id))
+        if pack_engine_paused(conn) and not dry_run:
+            # Paused via the dashboard control plane: open trades were just
+            # managed above, but no new paper entries may open.
+            return out
         signals = today_scan(config_path, refresh=False)
         for sig, underlying, underlying_symbol, name, stop_pct, target_r, exit_t in signals:
             stop_u, target_u = stop_target_from_signal(sig, stop_pct, target_r)

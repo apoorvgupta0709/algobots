@@ -439,3 +439,35 @@ def test_load_config_parses_cpr_underlyings_restriction(tmp_path: Path):
     assert cfg.strategies["cpr_trend_debit_spread"].underlyings == ("BANKNIFTY",)
     # Default stays both when the key is absent.
     assert cfg.strategies["nifty_orb_debit_spread"].underlyings == ("NIFTY", "BANKNIFTY")
+
+
+# --- control plane: manual force-exit proxy math -------------------------------
+
+def test_proxy_force_exit_pnl_r_clamps_between_minus_one_and_target() -> None:
+    from scripts.run_nse_intraday_options_strategy_pack import proxy_force_exit_pnl_r
+
+    # long, halfway to stop -> -0.5R
+    assert proxy_force_exit_pnl_r(
+        direction="long", exit_underlying=Decimal("99.5"),
+        entry=Decimal("100"), stop=Decimal("99"), target_r=Decimal("2"),
+    ) == Decimal("-0.5")
+    # long, beyond stop -> clamped at -1R
+    assert proxy_force_exit_pnl_r(
+        direction="long", exit_underlying=Decimal("95"),
+        entry=Decimal("100"), stop=Decimal("99"), target_r=Decimal("2"),
+    ) == Decimal("-1")
+    # long, beyond target -> clamped at target_r
+    assert proxy_force_exit_pnl_r(
+        direction="long", exit_underlying=Decimal("110"),
+        entry=Decimal("100"), stop=Decimal("99"), target_r=Decimal("2"),
+    ) == Decimal("2")
+    # short direction mirrors the sign
+    assert proxy_force_exit_pnl_r(
+        direction="short", exit_underlying=Decimal("99.5"),
+        entry=Decimal("100"), stop=Decimal("101"), target_r=Decimal("2"),
+    ) == Decimal("0.5")
+    # degenerate stop==entry -> 0 (no risk distance, no R)
+    assert proxy_force_exit_pnl_r(
+        direction="long", exit_underlying=Decimal("101"),
+        entry=Decimal("100"), stop=Decimal("100"), target_r=Decimal("2"),
+    ) == Decimal("0")

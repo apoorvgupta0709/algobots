@@ -8,6 +8,7 @@ import psycopg
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = PROJECT_ROOT / "migrations" / "001_trading_research_schemas.sql"
+CONTROL_PLANE_MIGRATION = PROJECT_ROOT / "migrations" / "015_control_plane.sql"
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://hermes@127.0.0.1:55432/finance_tracker")
 
 
@@ -141,3 +142,90 @@ def test_approvals_store_confirmation_terms_for_auditable_live_order_scope() -> 
             )
             assert cur.fetchone()[0] is not None
             conn.rollback()
+
+
+def test_control_plane_migration_is_idempotent_and_locks_mode_to_paper() -> None:
+    assert CONTROL_PLANE_MIGRATION.exists(), "missing control plane migration"
+
+    sql = CONTROL_PLANE_MIGRATION.read_text()
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            # idempotent: applying twice must not error
+            cur.execute(sql)
+            cur.execute(sql)
+            conn.commit()
+
+            cur.execute(
+                """
+                select table_name
+                from information_schema.tables
+                where table_schema = 'research'
+                  and table_name in ('control_requests', 'control_state')
+                """
+            )
+            assert {row[0] for row in cur.fetchall()} == {"control_requests", "control_state"}
+
+            cur.execute("select engine, paused from research.control_state order by engine")
+            state = dict(cur.fetchall())
+            assert set(state) == {"banknifty_options_paper", "nse_intraday_options_strategy_pack"}
+
+            # mode is locked to 'paper' at the DB level
+            try:
+                cur.execute(
+                    """
+                    insert into research.control_requests (requested_by, engine, action_type, mode)
+                    values ('schema-test', 'banknifty_options_paper', 'engine_pause', 'live')
+                    """
+                )
+            except psycopg.IntegrityError:
+                conn.rollback()
+            else:
+                raise AssertionError("control_requests accepted a non-paper mode")
+
+
+def test_control_plane_role_is_insert_and_select_only() -> None:
+    sql = CONTROL_PLANE_MIGRATION.read_text()
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            conn.commit()
+
+    # Local pg_hba uses trust auth on loopback, so we can connect as the control role.
+    ctl_url = DATABASE_URL.replace("hermes@", "dashboard_ctl@")
+    with psycopg.connect(ctl_url) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into research.control_requests (requested_by, engine, action_type, mode, payload)
+                values ('schema-test', 'banknifty_options_paper', 'engine_pause', 'paper', '{}'::jsonb)
+                """
+            )
+            conn.rollback()
+
+            try:
+                cur.execute(
+                    "update research.control_requests set status = 'applied' where requested_by = 'schema-test'"
+                )
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+            else:
+                raise AssertionError("dashboard_ctl was able to UPDATE control_requests")
+
+            try:
+                cur.execute("delete from research.control_requests where requested_by = 'schema-test'")
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+            else:
+                raise AssertionError("dashboard_ctl was able to DELETE from control_requests")
+
+            try:
+                cur.execute(
+                    """
+                    insert into research.control_requests (requested_by, engine, action_type, mode, status)
+                    values ('schema-test', 'banknifty_options_paper', 'engine_pause', 'paper', 'applied')
+                    """
+                )
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+            else:
+                raise AssertionError("dashboard_ctl was able to INSERT a non-granted column (status)")

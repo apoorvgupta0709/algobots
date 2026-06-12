@@ -1467,3 +1467,71 @@ def test_evaluate_chain_signals_aligned_context_passes_clean() -> None:
     assert decision.allowed is True
     assert decision.reasons == []
     assert decision.warnings == []
+
+
+# --- control plane: pause + manual force-exit ---------------------------------
+
+def test_partition_force_exit_claims_claims_open_trades_only() -> None:
+    rows = [
+        (101, {"trade_id": 7}),
+        (102, {"trade_id": 99}),       # not open -> rejected
+        (103, {"trade_id": 7}),        # duplicate -> rejected
+        (104, {"trade_id": "8"}),      # string id of an open trade -> claimed
+        (105, {"trade_id": "abc"}),    # unparseable -> rejected
+        (106, {}),                     # missing -> rejected
+    ]
+    claims, rejects = bn.partition_force_exit_claims(rows, {7, 8})
+    assert claims == {7: 101, 8: 104}
+    assert [request_id for request_id, _ in rejects] == [102, 103, 105, 106]
+
+
+def test_evaluate_manual_force_exit_uses_ltp_when_available() -> None:
+    exit_premium, pnl = bn.evaluate_manual_force_exit(
+        entry_premium=Decimal("100"), ltp=Decimal("112.50"), quantity=30
+    )
+    assert exit_premium == Decimal("112.50")
+    assert pnl == Decimal("375.00")
+
+
+def test_evaluate_manual_force_exit_breakeven_without_quote() -> None:
+    exit_premium, pnl = bn.evaluate_manual_force_exit(
+        entry_premium=Decimal("100"), ltp=None, quantity=30
+    )
+    assert exit_premium == Decimal("100")
+    assert pnl == Decimal("0.00")
+
+
+class _FakeCursor:
+    def __init__(self, results: list[list[tuple]]) -> None:
+        self._results = list(results)
+        self._current: list[tuple] = []
+        self.statements: list[str] = []
+
+    def execute(self, sql: str, params: tuple | None = None) -> None:
+        self.statements.append(" ".join(sql.split()))
+        self._current = self._results.pop(0) if self._results else []
+
+    def fetchone(self) -> tuple | None:
+        return self._current[0] if self._current else None
+
+    def fetchall(self) -> list[tuple]:
+        return self._current
+
+
+def test_control_state_paused_false_when_table_missing() -> None:
+    cur = _FakeCursor([[(None,)]])
+    assert bn.control_state_paused(cur) is False
+
+
+def test_control_state_paused_reads_state() -> None:
+    cur = _FakeCursor([[("research.control_state",)], [(True,)]])
+    assert bn.control_state_paused(cur) is True
+    cur = _FakeCursor([[("research.control_state",)], [(False,)]])
+    assert bn.control_state_paused(cur) is False
+    cur = _FakeCursor([[("research.control_state",)], []])  # no row for engine
+    assert bn.control_state_paused(cur) is False
+
+
+def test_claim_force_exit_requests_skips_when_table_missing() -> None:
+    cur = _FakeCursor([[(None,)]])
+    assert bn.claim_force_exit_requests(cur, {1, 2}) == {}
