@@ -1,0 +1,31 @@
+{
+  "strategy_name": "banknifty_constituent_led_long_options_v1",
+  "title": "BankNifty Constituent-Led Long Options v1",
+  "hypothesis": "BankNifty directional long CE/PE trades have better expectancy when index structure, top-weight constituent momentum/news, and long-option volatility filters align.",
+  "target_universe": "BANKNIFTY weekly index options; paper only",
+  "timeframe": "5m entries, intraday exits",
+  "expected_edge": "Avoids weak index-only entries by requiring constituent confirmation and cost-aware risk cap.",
+  "config": {
+    "paper_only": true,
+    "live_orders_enabled": false,
+    "max_net_loss_per_trade": 1500,
+    "daily_loss_cap": 5000,
+    "allowed_structures": [
+      "long_call",
+      "long_put"
+    ]
+  },
+  "status": "research_spec_ready_for_backtest",
+  "safety": {
+    "paper_only": true,
+    "live_orders_enabled": false,
+    "requires_explicit_live_order_confirmation": true
+  },
+  "validation_plan": [
+    "compile deterministic strategy",
+    "unit-test entry/exit/risk gates",
+    "proxy backtest",
+    "paper run",
+    "manual review"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "strategy_name": "nifty_expiry_tuesday_defined_risk_v1",
+  "title": "Nifty Tuesday Expiry Defined-Risk Directional v1",
+  "hypothesis": "Nifty expiry-day directional trades should only run when gamma/event risk is bounded by a defined-risk long-option or debit-spread structure and deterministic stop logic.",
+  "target_universe": "NIFTY Tuesday expiry options; research/paper only",
+  "timeframe": "intraday expiry session",
+  "expected_edge": "Restricts expiry trades to known-loss structures and blocks undefined-risk premium selling.",
+  "config": {
+    "paper_only": true,
+    "live_orders_enabled": false,
+    "max_net_loss_per_trade": 1500,
+    "allowed_structures": [
+      "long_call",
+      "long_put",
+      "debit_spread_after_backtest"
+    ]
+  },
+  "status": "research_spec_ready_for_backtest",
+  "safety": {
+    "paper_only": true,
+    "live_orders_enabled": false,
+    "requires_explicit_live_order_confirmation": true
+  },
+  "validation_plan": [
+    "compile deterministic strategy",
+    "unit-test entry/exit/risk gates",
+    "proxy backtest",
+    "paper run",
+    "manual review"
+  ]
+}

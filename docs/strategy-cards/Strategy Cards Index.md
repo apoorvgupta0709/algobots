@@ -2,9 +2,14 @@
 
 Research-only strategy cards extracted from the trading book library.
 
+- [[Trading Knowledge Library Roadmap - 6 Deliverables]] — Roadmap for strategy cards, bot rules, reports, backtest specs, Obsidian notes, and vector DB improvements.
+- [[Source-Backed Bot Rule Pack]] — Reviewed paper-only rule pack derived from NSE/general trading sources.
 - [[Breakout Continuation]] — Momentum continuation setup after price breaks and holds above a prior resistance/range level with participation.
 - [[BankNifty Constituent-Led Directional Long Options]] — Directional BankNifty CE/PE card driven by constituent movement, reasons/news, index structure, and strict risk caps.
+- [[BankNifty Constituent-Led Long Options]] — Reviewed v1 source-backed CE/PE playbook with constituent confirmation and cost-aware risk gate.
 - [[BankNifty Official Payoff Structure Selector]] — NSE-source payoff structure selector: long CE/PE first, debit spreads later, short-premium structures research-only until tested.
+- [[NSE Defined-Risk Payoff Selector]] — Reviewed NSE payoff selector: automation limited to long options/tested debit spreads; undefined-risk structures blocked.
+- [[Long Options Volatility and Greeks Gate]] — Reviewed pre-entry volatility/Greeks gate for Nifty/BankNifty long options.
 - [[Earnings Sentiment Momentum]] — Context card for price strength supported by earnings/news/filing sentiment rather than technicals alone.
 - [[Failed Breakout Reversal]] — Reversal/avoidance setup when a breakout traps participants and fails to hold above the trigger level.
 - [[Options 360 Short Straddle Strangle Premium Decay]] — Research-only short straddle/strangle premium-decay and adjustment setups extracted from the uploaded Options 360 module.
