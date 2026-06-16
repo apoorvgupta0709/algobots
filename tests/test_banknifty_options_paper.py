@@ -441,13 +441,23 @@ def test_json_dumps_safe_handles_decimal_and_datetimes_from_quote_metadata() -> 
 def test_tick_does_not_scan_or_monitor_before_entry_on_non_boundary(monkeypatch) -> None:
     config = SimpleNamespace(entry_scan_interval_minutes=5, poll_interval_seconds=15)
     calls = {"scan": 0, "monitor": 0}
+    recorded: list[dict] = []
     monkeypatch.setattr(bn, "now_ist", lambda: datetime(2026, 6, 8, 9, 22, tzinfo=bn.IST))
     monkeypatch.setattr(bn, "has_open_option_trade", lambda _config: False)
     monkeypatch.setattr(bn, "scan_for_entry", lambda *args, **kwargs: calls.__setitem__("scan", calls["scan"] + 1) or [])
     monkeypatch.setattr(bn, "monitor_open_options", lambda *args, **kwargs: calls.__setitem__("monitor", calls["monitor"] + 1) or [])
+    monkeypatch.setattr(bn, "record_no_entry_decision", lambda *args, **kwargs: recorded.append(kwargs))
 
+    # Off the 5-minute boundary: stays silent and skips both scan and fast monitor,
+    # but still persists a best-effort audit row so the daily report sees every tick.
     assert bn.tick(config, loop_seconds=0) == []
     assert calls == {"scan": 0, "monitor": 0}
+    assert len(recorded) == 1
+    audit = recorded[0]
+    assert audit["mode"] == "tick"
+    assert audit["blocker"] == "entry_scan_interval_wait"
+    assert audit["metrics"]["entry_scan_interval_minutes"] == 5
+    assert audit["metrics"]["tick_minute"] == 22
 
 
 def test_tick_scans_every_five_minutes_but_defers_fast_monitor_until_entry(monkeypatch) -> None:
@@ -1506,10 +1516,18 @@ class _FakeCursor:
         self._results = list(results)
         self._current: list[tuple] = []
         self.statements: list[str] = []
+        self.params: list[tuple | None] = []
 
     def execute(self, sql: str, params: tuple | None = None) -> None:
         self.statements.append(" ".join(sql.split()))
+        self.params.append(params)
         self._current = self._results.pop(0) if self._results else []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
 
     def fetchone(self) -> tuple | None:
         return self._current[0] if self._current else None
@@ -1535,3 +1553,226 @@ def test_control_state_paused_reads_state() -> None:
 def test_claim_force_exit_requests_skips_when_table_missing() -> None:
     cur = _FakeCursor([[(None,)]])
     assert bn.claim_force_exit_requests(cur, {1, 2}) == {}
+
+
+class _FakeConnection:
+    def __init__(self, cursor: _FakeCursor) -> None:
+        self._cursor = cursor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def cursor(self) -> _FakeCursor:
+        return self._cursor
+
+
+def _sample_campaign() -> bn.Campaign:
+    return bn.Campaign(
+        campaign_id=42,
+        name="test",
+        start_date=datetime(2026, 6, 8).date(),
+        starting_capital=Decimal("100000"),
+        max_daily_loss=Decimal("5000"),
+        max_open_positions=1,
+        max_trades_per_day=3,
+    )
+
+
+def test_record_no_entry_decision_inserts_compact_audit_row(monkeypatch) -> None:
+    cur = _FakeCursor([])
+    monkeypatch.setattr(bn, "connect_db", lambda: _FakeConnection(cur))
+    fixed_now = datetime(2026, 6, 16, 9, 25, tzinfo=bn.IST)
+    monkeypatch.setattr(bn, "now_ist", lambda: fixed_now)
+
+    bn.record_no_entry_decision(
+        SimpleNamespace(campaign_name="test"),
+        mode="tick",
+        blocker="direction_unconfirmed",
+        reason="No trade: constituent/index confirmation not aligned.",
+        metrics={"weighted_constituent_pct": Decimal("-0.00")},
+        raw={"source": "unit-test"},
+        campaign=_sample_campaign(),
+    )
+
+    assert "insert into research.option_paper_no_entry_decisions" in cur.statements[0]
+    params = cur.params[0]
+    assert params is not None
+    assert params[0] == 42
+    assert params[1] == fixed_now.date()
+    assert params[4:7] == ("tick", "direction_unconfirmed", "No trade: constituent/index confirmation not aligned.")
+    assert '"weighted_constituent_pct": "-0.00"' in params[7]
+
+
+def test_record_no_entry_decision_appends_new_row_each_call(monkeypatch) -> None:
+    """Two no-entry ticks in the same minute with the same blocker must produce
+    two distinct INSERTs (append-only audit), never an upsert that overwrites the
+    earlier row and undercounts the tick.
+    """
+    cur = _FakeCursor([])
+    fixed_now = datetime(2026, 6, 16, 9, 25, 10, tzinfo=bn.IST)
+    monkeypatch.setattr(bn, "now_ist", lambda: fixed_now)
+    monkeypatch.setattr(bn, "connect_db", lambda: (_ for _ in ()).throw(AssertionError("should use supplied cursor")))
+
+    common = dict(
+        mode="tick",
+        blocker="direction_unconfirmed",
+        reason="No trade: constituent/index confirmation not aligned.",
+        campaign=_sample_campaign(),
+        cur=cur,
+    )
+    bn.record_no_entry_decision(SimpleNamespace(campaign_name="test"), metrics={"tick": 1}, **common)
+    bn.record_no_entry_decision(SimpleNamespace(campaign_name="test"), metrics={"tick": 2}, **common)
+
+    inserts = [s for s in cur.statements if "insert into research.option_paper_no_entry_decisions" in s]
+    assert len(inserts) == 2
+    # Plain append: no upsert/dedupe that would collapse same-minute same-blocker ticks.
+    assert all("on conflict" not in s for s in inserts)
+    # Both rows carry the same minute bucket + blocker yet are recorded separately.
+    minute_bucket = fixed_now.replace(second=0, microsecond=0)
+    insert_params = [
+        p
+        for s, p in zip(cur.statements, cur.params)
+        if "insert into research.option_paper_no_entry_decisions" in s
+    ]
+    assert all(p[3] == minute_bucket and p[5] == "direction_unconfirmed" for p in insert_params)
+    assert '"tick": 1' in insert_params[0][7]
+    assert '"tick": 2' in insert_params[1][7]
+
+
+def test_migration_017_repairs_stale_same_minute_dedupe_key() -> None:
+    """Migration 017 is append-only, but an earlier shape used a same-minute
+    unique/upsert key on (campaign_id, decision_minute, blocker). Because the
+    table uses `create table if not exists`, re-running the migration over that
+    stale shape would leave the old unique constraint/index in place; the plain
+    INSERT then hits duplicate-key errors on same-minute same-blocker ticks, and
+    record_no_entry_decision swallows exceptions, silently dropping audit rows.
+    The migration must therefore contain explicit repair logic that removes any
+    unique constraint OR unique index covering exactly the old dedupe columns,
+    regardless of its generated name.
+    """
+    sql = (PROJECT_ROOT / "migrations" / "017_banknifty_options_no_entry_decisions.sql").read_text()
+    lowered = sql.lower()
+
+    # A catalog-driven repair block handles arbitrarily named constraints/indexes.
+    assert "do $$" in lowered
+    assert "pg_constraint" in lowered
+    assert "pg_index" in lowered
+
+    # Repair must drop both flavours of the stale dedupe key.
+    assert "drop constraint if exists" in lowered
+    assert "drop index if exists" in lowered
+
+    # The repair must key off exactly the old dedupe columns.
+    for column in ("campaign_id", "decision_minute", "blocker"):
+        assert column in lowered
+    # The columns are matched as a set (array_agg ... order by guards against
+    # column-order differences in the stale key).
+    assert "array['blocker', 'campaign_id', 'decision_minute']" in lowered
+
+    # And it must only target UNIQUE keys (not the append-only support indexes).
+    assert "con.contype in ('u', 'p')" in lowered
+    assert "idx.indisunique" in lowered
+
+
+def test_scan_quiet_no_strategy_stays_silent_but_records_decision(monkeypatch) -> None:
+    config = SimpleNamespace(
+        strategy_router=(
+            bn.StrategyCardRule(
+                strategy_id="banknifty_constituent_led_directional_long_options",
+                name="BankNifty Constituent-Led Directional Long Options",
+                enabled=False,
+                paper_trade_enabled=True,
+                entry_function="constituent_led_long_options",
+                status="paper_ready",
+                source="",
+                notes="",
+            ),
+        )
+    )
+    recorded: list[dict] = []
+
+    def fake_record(_config, **kwargs):
+        recorded.append(kwargs)
+
+    monkeypatch.setattr(bn, "record_no_entry_decision", fake_record)
+
+    assert bn.scan_for_entry(config, quiet_no_change=True, run_context="tick") == []
+    assert recorded[0]["mode"] == "tick"
+    assert recorded[0]["blocker"] == "no_strategy"
+    assert "no enabled paper-safe" in recorded[0]["reason"]
+
+
+def test_scan_db_no_trade_records_on_current_cursor(monkeypatch) -> None:
+    config = SimpleNamespace(
+        underlying_symbol="NSE:NIFTYBANK-INDEX",
+        constituents=(),
+        quote_stale_seconds=90,
+        no_new_trades_before=bn.dtime(9, 20, tzinfo=bn.IST),
+        no_new_trades_after=bn.dtime(14, 45, tzinfo=bn.IST),
+    )
+    cur = _FakeCursor([])
+    campaign = _sample_campaign()
+    recorded: list[dict] = []
+
+    monkeypatch.setattr(bn, "connect_db", lambda: _FakeConnection(cur))
+    monkeypatch.setattr(bn, "selected_constituent_led_strategy", lambda _config: SimpleNamespace(name="test", strategy_id="s"))
+    monkeypatch.setattr(bn, "current_campaign", lambda _cur, _config: campaign)
+    monkeypatch.setattr(bn, "control_state_paused", lambda _cur: False)
+    monkeypatch.setattr(bn, "trade_counts", lambda _cur, _campaign: (0, 0, Decimal("0")))
+    monkeypatch.setattr(bn, "now_ist", lambda: datetime(2026, 6, 16, 9, 25, tzinfo=bn.IST))
+    monkeypatch.setattr(bn, "get_quote", lambda *_args, **_kwargs: (None, {}, True))
+    monkeypatch.setattr(bn, "record_no_entry_decision", lambda *args, **kwargs: recorded.append(kwargs))
+
+    assert bn.scan_for_entry(config, quiet_no_change=True, run_context="tick") == []
+
+    assert len(recorded) == 1
+    assert recorded[0]["blocker"] == "quote_stale"
+    assert recorded[0]["campaign"] == campaign
+    assert recorded[0]["cur"] is cur
+
+
+def test_record_no_entry_decision_uses_supplied_cursor_without_second_connection(monkeypatch) -> None:
+    cur = _FakeCursor([])
+    fixed_now = datetime(2026, 6, 16, 9, 26, tzinfo=bn.IST)
+    monkeypatch.setattr(bn, "now_ist", lambda: fixed_now)
+    monkeypatch.setattr(bn, "connect_db", lambda: (_ for _ in ()).throw(AssertionError("second connection should not be opened")))
+
+    bn.record_no_entry_decision(
+        SimpleNamespace(campaign_name="test"),
+        mode="tick",
+        blocker="quote_stale",
+        reason="No trade: quote stale",
+        metrics={},
+        campaign=_sample_campaign(),
+        cur=cur,
+    )
+
+    assert "insert into research.option_paper_no_entry_decisions" in cur.statements[0]
+    assert cur.params[0] is not None
+    assert cur.params[0][5:7] == ("quote_stale", "No trade: quote stale")
+
+
+def test_no_trade_report_summarizes_first_latest_and_counts(monkeypatch) -> None:
+    first_at = datetime(2026, 6, 16, 9, 25, tzinfo=bn.IST)
+    latest_at = datetime(2026, 6, 16, 10, 5, tzinfo=bn.IST)
+    cur = _FakeCursor(
+        [
+            [("direction_unconfirmed", 2, first_at, latest_at), ("quote_stale", 1, first_at, first_at)],
+            [(first_at, "quote_stale", "BankNifty quote missing/stale")],
+            [(latest_at, "direction_unconfirmed", "No trade: constituent/index confirmation not aligned")],
+        ]
+    )
+    monkeypatch.setattr(bn, "connect_db", lambda: _FakeConnection(cur))
+    monkeypatch.setattr(bn, "current_campaign", lambda _cur, _config: _sample_campaign())
+
+    lines = bn.no_trade_report(SimpleNamespace(campaign_name="test"), trade_date=datetime(2026, 6, 16).date())
+
+    joined = "\n".join(lines)
+    assert "Persisted no-entry ticks: 3" in joined
+    assert "First blocker: 2026-06-16T09:25:00+05:30 — quote_stale" in joined
+    assert "Latest blocker: 2026-06-16T10:05:00+05:30 — direction_unconfirmed" in joined
+    assert "- direction_unconfirmed: 2 tick(s)" in joined
+    assert "- quote_stale: 1 tick(s)" in joined
