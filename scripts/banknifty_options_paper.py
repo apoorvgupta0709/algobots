@@ -2155,6 +2155,34 @@ def get_day_range_and_adr10(cur: psycopg.Cursor, symbol: str, *, resolution: str
     return day_high, day_low, decimal_or_none(adr_row[0] if adr_row else None)
 
 
+def get_missing_constituent_candle_coverage(
+    cur: psycopg.Cursor,
+    constituents: tuple[BankNiftyConstituent, ...],
+    *,
+    resolution: str = "5",
+) -> list[BankNiftyConstituent]:
+    """Return constituents with no intraday candle rows in ``market.candles`` today.
+
+    Read-only coverage check used by the candle-coverage report so a missing
+    constituent candle feed is surfaced explicitly rather than silently skewing
+    breadth/structure logic. A constituent counts as covered once it has at least
+    one row for the given resolution on the current IST trading date.
+    """
+    if not constituents:
+        return []
+    symbols = [c.fyers_symbol for c in constituents]
+    cur.execute(
+        """
+        select distinct symbol
+        from market.candles
+        where symbol = any(%s) and resolution=%s and ts::date = current_date
+        """,
+        (symbols, resolution),
+    )
+    covered = {row[0] for row in cur.fetchall()}
+    return [c for c in constituents if c.fyers_symbol not in covered]
+
+
 def confluence_levels_from_candles(candles: list[dict[str, Any]], *, direction: str, structure_lookback: int = 8) -> list[Decimal]:
     if len(candles) < 3:
         return []
@@ -2680,7 +2708,12 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
         if warning:
             refresh_warnings.append(warning)
         if config.index_structure_confirmation_enabled or config.realistic_risk_enabled:
-            warning = safe_refresh_today_history([config.underlying_symbol], resolution=config.structure_candle_resolution)
+            # Refresh constituent candles alongside the index so per-constituent
+            # structure/breadth checks see the same intraday coverage that quotes do.
+            warning = safe_refresh_today_history(
+                [config.underlying_symbol, *[c.fyers_symbol for c in config.constituents]],
+                resolution=config.structure_candle_resolution,
+            )
             if warning:
                 refresh_warnings.append(warning)
     with connect_db() as conn:
@@ -3667,6 +3700,42 @@ def no_trade_report(config: CampaignConfig, *, trade_date: date | None = None) -
     return lines
 
 
+def candle_coverage_report(config: CampaignConfig) -> list[str]:
+    """Read-only report of constituent 5-minute candle coverage for today."""
+    resolution = config.structure_candle_resolution
+    total = len(config.constituents)
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            missing = get_missing_constituent_candle_coverage(cur, config.constituents, resolution=resolution)
+    missing_symbols = {c.fyers_symbol for c in missing}
+    covered = total - len(missing)
+    lines = [
+        "## BankNifty Constituent Candle Coverage Report",
+        "Safety: read-only coverage check — no live orders placed.",
+        "",
+        f"Campaign: {config.campaign_name}",
+        f"Date: {now_ist().date().isoformat()}",
+        f"Resolution: {resolution}-minute",
+        f"Constituents covered: {covered}/{total}",
+        "",
+    ]
+    if not config.constituents:
+        lines.append("No constituents configured.")
+        return lines
+    for constituent in config.constituents:
+        status = "MISSING" if constituent.fyers_symbol in missing_symbols else "ok"
+        lines.append(f"- {constituent.symbol} ({constituent.fyers_symbol}): {status}")
+    if missing:
+        lines += [
+            "",
+            f"Missing today's {resolution}-minute candles: "
+            + ", ".join(c.fyers_symbol for c in missing),
+        ]
+    else:
+        lines += ["", "All constituents have today's candle coverage."]
+    return lines
+
+
 def init_campaign(config: CampaignConfig) -> list[str]:
     apply_migrations()
     with connect_db() as conn:
@@ -3751,7 +3820,7 @@ def tick(config: CampaignConfig, *, refresh: bool = True, quiet_no_change: bool 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    parser.add_argument("--mode", choices=["init", "refresh-contracts", "scan", "monitor", "tick", "report", "no-trade-report"], required=True)
+    parser.add_argument("--mode", choices=["init", "refresh-contracts", "scan", "monitor", "tick", "report", "no-trade-report", "candle-coverage-report"], required=True)
     parser.add_argument("--refresh-quotes", action="store_true", help="Read-only FYERS quote refresh before evaluating.")
     parser.add_argument("--quiet-no-change", action="store_true", help="Print nothing if no action occurred.")
     parser.add_argument("--dry-run", action="store_true", help="For scan mode, evaluate candidate without inserting a paper trade.")
@@ -3772,6 +3841,8 @@ def main() -> None:
     elif args.mode == "no-trade-report":
         report_date = date.fromisoformat(args.date) if args.date else None
         lines = no_trade_report(config, trade_date=report_date)
+    elif args.mode == "candle-coverage-report":
+        lines = candle_coverage_report(config)
     else:
         output = PROJECT_ROOT / "reports" / f"banknifty_options_paper_snapshot_{now_ist().date().isoformat()}.md"
         lines = snapshot_report(config, output=output, print_report=False)

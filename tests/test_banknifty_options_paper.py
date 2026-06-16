@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import scripts.banknifty_options_paper as bn
 from scripts.banknifty_options_paper import (
+    BankNiftyConstituent,
     FyersOptionContract,
     build_stop_target,
     cap_stop_by_trade_loss,
@@ -1776,3 +1777,123 @@ def test_no_trade_report_summarizes_first_latest_and_counts(monkeypatch) -> None
     assert "Latest blocker: 2026-06-16T10:05:00+05:30 — direction_unconfirmed" in joined
     assert "- direction_unconfirmed: 2 tick(s)" in joined
     assert "- quote_stale: 1 tick(s)" in joined
+
+
+class _CandleCoverageCursor:
+    """Minimal psycopg-cursor stand-in for candle-coverage tests."""
+
+    def __init__(self, fetchall_result=None) -> None:
+        self._fetchall_result = list(fetchall_result or [])
+        self.queries: list[tuple[str, object]] = []
+
+    def execute(self, sql, params=None) -> None:
+        self.queries.append((sql, params))
+
+    def fetchall(self):
+        return self._fetchall_result
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+
+class _CandleCoverageConn:
+    def __init__(self, cursor) -> None:
+        self._cursor = cursor
+
+    def cursor(self):
+        return self._cursor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+
+def _constituents() -> tuple[BankNiftyConstituent, ...]:
+    return (
+        BankNiftyConstituent(symbol="HDFCBANK", fyers_symbol="NSE:HDFCBANK-EQ"),
+        BankNiftyConstituent(symbol="AUBANK", fyers_symbol="NSE:AUBANK-EQ"),
+        BankNiftyConstituent(symbol="ICICIBANK", fyers_symbol="NSE:ICICIBANK-EQ"),
+    )
+
+
+def test_scan_for_entry_refreshes_constituent_candles(monkeypatch) -> None:
+    constituents = _constituents()
+    config = SimpleNamespace(
+        underlying_symbol="NSE:NIFTYBANK-INDEX",
+        constituents=constituents,
+        index_structure_confirmation_enabled=True,
+        realistic_risk_enabled=False,
+        structure_candle_resolution="5",
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(bn, "selected_constituent_led_strategy", lambda _c: object())
+    monkeypatch.setattr(bn, "safe_refresh_quotes", lambda symbols: None)
+    monkeypatch.setattr(
+        bn,
+        "safe_refresh_today_history",
+        lambda symbols, *, resolution: captured.update(symbols=list(symbols), resolution=resolution),
+    )
+
+    class _StopScan(Exception):
+        pass
+
+    def _no_db():
+        raise _StopScan()
+
+    # Stop the scan right after the refresh block so no real DB is needed.
+    monkeypatch.setattr(bn, "connect_db", _no_db)
+
+    with pytest.raises(_StopScan):
+        bn.scan_for_entry(config, refresh=True)
+
+    assert captured["resolution"] == "5"
+    assert captured["symbols"][0] == "NSE:NIFTYBANK-INDEX"
+    for constituent in constituents:
+        assert constituent.fyers_symbol in captured["symbols"]
+
+
+def test_get_missing_constituent_candle_coverage_returns_only_uncovered() -> None:
+    constituents = _constituents()
+    # HDFCBANK and ICICIBANK have rows today; AUBANK is missing.
+    cur = _CandleCoverageCursor(fetchall_result=[("NSE:HDFCBANK-EQ",), ("NSE:ICICIBANK-EQ",)])
+
+    missing = bn.get_missing_constituent_candle_coverage(cur, constituents, resolution="5")
+
+    assert [c.fyers_symbol for c in missing] == ["NSE:AUBANK-EQ"]
+    sql, params = cur.queries[0]
+    assert params[0] == ["NSE:HDFCBANK-EQ", "NSE:AUBANK-EQ", "NSE:ICICIBANK-EQ"]
+    assert params[1] == "5"
+
+
+def test_get_missing_constituent_candle_coverage_empty_skips_query() -> None:
+    cur = _CandleCoverageCursor()
+    assert bn.get_missing_constituent_candle_coverage(cur, (), resolution="5") == []
+    assert cur.queries == []
+
+
+def test_candle_coverage_report_lists_covered_and_missing(monkeypatch) -> None:
+    constituents = _constituents()
+    config = SimpleNamespace(
+        campaign_name="banknifty_options_paper",
+        structure_candle_resolution="5",
+        constituents=constituents,
+    )
+    # Only HDFCBANK and ICICIBANK return rows for today's 5-minute candles.
+    cur = _CandleCoverageCursor(fetchall_result=[("NSE:HDFCBANK-EQ",), ("NSE:ICICIBANK-EQ",)])
+    monkeypatch.setattr(bn, "connect_db", lambda: _CandleCoverageConn(cur))
+
+    lines = bn.candle_coverage_report(config)
+    joined = "\n".join(lines)
+
+    assert "BankNifty Constituent Candle Coverage Report" in joined
+    assert "Resolution: 5-minute" in joined
+    assert "Constituents covered: 2/3" in joined
+    assert "- HDFCBANK (NSE:HDFCBANK-EQ): ok" in joined
+    assert "- ICICIBANK (NSE:ICICIBANK-EQ): ok" in joined
+    assert "- AUBANK (NSE:AUBANK-EQ): MISSING" in joined
+    assert "Missing today's 5-minute candles: NSE:AUBANK-EQ" in joined
