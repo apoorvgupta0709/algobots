@@ -55,6 +55,47 @@ def as_time(value: Any) -> datetime | None:
         return None
 
 
+def _redact(text: str, *, limit: int = 500) -> str:
+    """Scrub known secret env values out of a note string and cap its length.
+
+    Run notes are persisted to PostgreSQL and printed, so they must never carry
+    tokens / client ids / secrets that might appear inside an exception message
+    or a URL embedded in it. We replace any occurrence of a known credential
+    value with a placeholder and truncate, so a leaked token never lands in the
+    database.
+    """
+    out = text
+    for name in (
+        "FYERS_ACCESS_TOKEN",
+        "FYERS_CLIENT_ID",
+        "FYERS_SECRET_KEY",
+        "FYERS_REFRESH_TOKEN",
+    ):
+        secret = os.getenv(name)
+        if secret:
+            out = out.replace(secret, f"<{name}>")
+    if len(out) > limit:
+        out = out[:limit] + "...(truncated)"
+    return out
+
+
+def _safe_response_note(response: dict[str, Any]) -> str:
+    """Summarize a non-ok FYERS response WITHOUT echoing the raw payload.
+
+    The full response dict can contain credential-bearing or otherwise sensitive
+    fields, so only the status, error code, and a redacted human message are
+    kept — never the raw body.
+    """
+    parts = [f"s={response.get('s')}"]
+    code = response.get("code")
+    if code is not None:
+        parts.append(f"code={code}")
+    message = response.get("message")
+    if message:
+        parts.append(f"message={_redact(str(message), limit=200)}")
+    return "FYERS quotes non-ok response: " + ", ".join(parts)
+
+
 def upsert_instrument(cur: psycopg.Cursor, symbol: str, raw: dict[str, Any] | None = None) -> None:
     exchange = symbol.split(":", 1)[0] if ":" in symbol else None
     cur.execute(
@@ -73,11 +114,12 @@ def upsert_instrument(cur: psycopg.Cursor, symbol: str, raw: dict[str, Any] | No
 def run_ingest(symbols: list[str]) -> None:
     api = fyers()
     request = {"symbols": ",".join(symbols)}
-    response = api.quotes(data=request)
-    if response.get("s") != "ok":
-        raise RuntimeError(f"FYERS quotes failed: {response}")
-
-    quotes = response.get("d") or []
+    # Create the ingestion run row BEFORE the FYERS call so that EVERY attempt —
+    # including an auth/token failure that never returns ok — is recorded as a
+    # run the readiness watchdog can see. The row starts as 'running' and is
+    # updated to 'success' or 'error' below; on error we commit it explicitly so
+    # the failed run survives the re-raise (the connection context manager would
+    # otherwise roll the whole transaction, including this row, back).
     with connect_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -91,6 +133,10 @@ def run_ingest(symbols: list[str]) -> None:
             run_id = cur.fetchone()[0]
             rows = 0
             try:
+                response = api.quotes(data=request)
+                if response.get("s") != "ok":
+                    raise RuntimeError(_safe_response_note(response))
+                quotes = response.get("d") or []
                 for item in quotes:
                     symbol = item.get("n") or item.get("symbol")
                     v = item.get("v") or item
@@ -140,8 +186,11 @@ def run_ingest(symbols: list[str]) -> None:
                     set finished_at = now(), status = 'error', notes = %s, rows_inserted = %s
                     where run_id = %s
                     """,
-                    (str(exc), rows, run_id),
+                    (_redact(str(exc)), rows, run_id),
                 )
+                # Persist the failed run before re-raising; the context manager
+                # rolls back on exception, which would otherwise discard it.
+                conn.commit()
                 raise
     print(f"Stored {rows} quote snapshots")
 
