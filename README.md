@@ -234,6 +234,37 @@ with `needs_ocr` and skipped. Config: `config/knowledge_ingestion.json`.
 Workflow from book knowledge to a live-trading shortlist:
 `docs/plans/book-to-live-strategy-playbook.md`.
 
+## BankNifty day-pattern library
+
+Research / paper-only daywise trend-pattern analytics. Classifies every BankNifty
+session into one of `trend | range | spike_channel | trending_range | reversal |
+chop` using deterministic, config-driven rules over stored 5-minute index +
+constituent candles (and option-chain context when available), then attaches the
+nearest historical similar days. No FYERS order placement; the dashboard reads
+the tables via the read-only role.
+
+```bash
+cd /opt/data/finance-db
+
+# Backfill / refresh the library (writes research.banknifty_day_features +
+# research.banknifty_day_classifications). Add --dry-run to skip writes.
+uv run python scripts/build_banknifty_trend_pattern_library.py \
+  --from 2025-06-01 --to 2026-06-16 --resolution 5 --print
+
+# After-market report for one session -> reports/banknifty_trend_patterns/<date>_BANKNIFTY.{md,json}
+uv run python scripts/generate_banknifty_trend_pattern_report.py --date 2026-06-16 --print
+
+# Cron wrapper (builds + reports today). Created but NOT scheduled yet.
+./scripts/banknifty_trend_pattern_report.sh
+```
+
+Thresholds live in `config/banknifty_trend_patterns.json`. Missing option-chain
+data is warned, never guessed. ML/HMM/tree/boosting stay experiment-only roadmap;
+deterministic rules + nearest-neighbour is the sole production path. Report
+playbooks use the runner exit model — after +0.5R move the paper stop to
+breakeven + one tick / cost proxy, then trail via MFE ratchet / structure
+trailing — never a fixed profit cap. Migration: `migrations/016_banknifty_trend_patterns.sql`.
+
 ## Roadmap
 
 Full roadmap with done/pending status:

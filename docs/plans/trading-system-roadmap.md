@@ -173,9 +173,45 @@ Pending before any live order code:
 - Build FYERS order-placement wrapper that refuses to run unless approval and risk checks pass.
 - Require explicit user confirmation per order.
 
+## Phase 8 — BankNifty day-regime pattern library
+
+Status: Done (deterministic-rules + nearest-neighbour production path); ML experiment-only
+
+Done:
+
+- `scripts/banknifty_trend_patterns.py` — pure feature extraction + deterministic
+  classifier (`trend|range|spike_channel|trending_range|reversal|chop`) +
+  nearest-neighbour similar-day helpers + paper/research playbook. No DB writes.
+- `migrations/016_banknifty_trend_patterns.sql` — `research.banknifty_day_features`,
+  `banknifty_day_classifications`, `banknifty_day_pattern_reports` (idempotent;
+  class/direction CHECK constraints; `dashboard_ro` SELECT grant).
+- `scripts/build_banknifty_trend_pattern_library.py` — backfill/refresh CLI over
+  stored 5m index + constituent candles and option-chain summary context.
+- `scripts/generate_banknifty_trend_pattern_report.py` — after-market Markdown/JSON
+  report (classification, evidence, similar days, how-it-could-have-been-played,
+  bot lessons). Runner exit model only (0.5R breakeven + MFE trailing/ratchet);
+  never a fixed profit cap.
+- `scripts/banknifty_trend_pattern_report.sh` — flock cron wrapper, created but
+  NOT scheduled until backfill+report verified across sessions.
+- Config-driven thresholds in `config/banknifty_trend_patterns.json`.
+- Historical backfill verified: 90 sessions, all six classes represented, missing
+  option-chain warned (not guessed), similar-day lists populate as history grows.
+
+Experiment-only (never default until promotion gates pass): clustering (KMeans/
+GMM/hierarchical), HMM/sequence states, decision-tree/random-forest, gradient
+boosting. No experimental model drives any paper/live decision.
+
+Pending:
+
+- Schedule the cron wrapper (~16:00 IST, Mon–Fri) + Telegram delivery once stable.
+- Optionally attach latest day-pattern context into paper-trade `raw` as advisory
+  only (must not place orders or override paper safety).
+
 ## Current verified test status
 
-- Full test suite: 16 passed.
+- Full test suite: 16 passed (pre-Phase-8 baseline; Phase 8 adds four test files:
+  `test_banknifty_trend_patterns.py`, `test_banknifty_trend_pattern_library.py`,
+  `test_banknifty_trend_pattern_report.py`, `test_banknifty_trend_pattern_schema.py`).
 
 ## Next recommended build order
 

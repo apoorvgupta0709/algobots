@@ -1,0 +1,171 @@
+{
+  "session_date": "2026-06-15",
+  "underlying": "BANKNIFTY",
+  "classification": {
+    "primary_class": "trend",
+    "direction": "bearish",
+    "confidence": 0.5995,
+    "rule_version": "banknifty_trend_patterns_v1",
+    "algorithm": "deterministic_rules",
+    "secondary_tags": [
+      "spike_channel"
+    ]
+  },
+  "evidence": {
+    "open": 57679.65,
+    "high": 57804.5,
+    "low": 57119.2,
+    "close": 57160.65,
+    "prev_close": 56780.6,
+    "gap_pct": 1.58,
+    "day_return_pct": -0.9,
+    "day_range_pct": 1.19,
+    "orb_high": 57804.5,
+    "orb_low": 57445.55,
+    "orb_range_pct": 0.62,
+    "orb_break_direction": "down",
+    "orb_hold": true,
+    "close_location": 0.0605,
+    "vwap_cross_count": 2,
+    "vwap_side_pct": 4.0,
+    "realized_vol": 0.0629,
+    "range_vs_adr10": 0.7825,
+    "mfe_from_open_pct": 0.22,
+    "mae_from_open_pct": -0.97,
+    "day_high_time": "09:15",
+    "day_low_time": "15:10",
+    "weighted_positive_breadth_pct": 0.0,
+    "weighted_negative_breadth_pct": 100.0,
+    "weighted_vwap_confirm_pct": 100.0,
+    "breadth_divergence": false,
+    "top_positive_contributors": [],
+    "top_negative_contributors": [
+      {
+        "symbol": "NSE:HDFCBANK-EQ",
+        "move_pct": -1.61,
+        "contribution": -28.8239
+      },
+      {
+        "symbol": "NSE:ICICIBANK-EQ",
+        "move_pct": -1.89,
+        "contribution": -25.7567
+      },
+      {
+        "symbol": "NSE:SBIN-EQ",
+        "move_pct": -1.35,
+        "contribution": -12.2368
+      }
+    ],
+    "atm_iv": null,
+    "iv_regime": null,
+    "pcr": null,
+    "max_pain_distance_pct": null,
+    "option_chain_available": false,
+    "candle_count": 75,
+    "warnings": [
+      "option-chain context unavailable for session"
+    ]
+  },
+  "segments": [
+    {
+      "name": "open_drive",
+      "start_ist": "09:15",
+      "end_ist": "10:15",
+      "return_pct": -0.51,
+      "range_pct": 0.8,
+      "vwap_side_pct": 0.0,
+      "net_direction": "down",
+      "volume_share": 33.81,
+      "close_location": 0.0972,
+      "candle_count": 12
+    },
+    {
+      "name": "midday",
+      "start_ist": "10:15",
+      "end_ist": "13:30",
+      "return_pct": -0.15,
+      "range_pct": 0.64,
+      "vwap_side_pct": 7.69,
+      "net_direction": "down",
+      "volume_share": 34.79,
+      "close_location": 0.228,
+      "candle_count": 39
+    },
+    {
+      "name": "close",
+      "start_ist": "13:30",
+      "end_ist": "15:30",
+      "return_pct": -0.24,
+      "range_pct": 0.49,
+      "vwap_side_pct": 0.0,
+      "net_direction": "down",
+      "volume_share": 31.4,
+      "close_location": 0.148,
+      "candle_count": 24
+    }
+  ],
+  "similar_days": [
+    {
+      "note": "trending_range/bearish, ret -0.89%",
+      "distance": 0.9183,
+      "direction": "bearish",
+      "similarity": 0.5213,
+      "session_date": "2026-05-21",
+      "primary_class": "trending_range",
+      "day_return_pct": -0.89
+    },
+    {
+      "note": "trend/bearish, ret -1.37%",
+      "distance": 2.2631,
+      "direction": "bearish",
+      "similarity": 0.3065,
+      "session_date": "2026-06-01",
+      "primary_class": "trend",
+      "day_return_pct": -1.37
+    },
+    {
+      "note": "trend/bearish, ret -2.15%",
+      "distance": 4.017,
+      "direction": "bearish",
+      "similarity": 0.1993,
+      "session_date": "2026-03-23",
+      "primary_class": "trend",
+      "day_return_pct": -2.15
+    },
+    {
+      "note": "trend/bearish, ret -2.18%",
+      "distance": 4.0512,
+      "direction": "bearish",
+      "similarity": 0.198,
+      "session_date": "2026-03-30",
+      "primary_class": "trend",
+      "day_return_pct": -2.18
+    },
+    {
+      "note": "trend/bearish, ret -1.98%",
+      "distance": 5.0472,
+      "direction": "bearish",
+      "similarity": 0.1654,
+      "session_date": "2026-03-11",
+      "primary_class": "trend",
+      "day_return_pct": -1.98
+    }
+  ],
+  "playbook": {
+    "primary_class": "trend",
+    "direction": "bearish",
+    "how_it_could_have_been_played": [
+      "Trend day (bearish): paper-bias toward PE (long puts). ORB hold + VWAP/pullback continuation entries; hold the runner.",
+      "Add only on shallow pullbacks that respect VWAP; avoid counter-trend fades."
+    ],
+    "bot_lessons": [
+      "ORB break down held; this is a primary allowed/blocked-entry signal for the day type.",
+      "Option-chain context (ATM IV / PCR / max-pain) was unavailable; classification used index + breadth only (warned, not guessed).",
+      "Exit model: after +0.5R move the paper stop to breakeven + one tick / cost proxy, then trail via MFE ratchet / structure trailing. No fixed profit cap."
+    ],
+    "exit_model": "Exit model: after +0.5R move the paper stop to breakeven + one tick / cost proxy, then trail via MFE ratchet / structure trailing. No fixed profit cap.",
+    "paper_only": true
+  },
+  "exit_model": "Exit model: after +0.5R move the paper stop to breakeven + one tick / cost proxy, then trail via MFE ratchet / structure trailing. No fixed profit cap.",
+  "paper_only": true
+}
