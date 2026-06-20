@@ -282,6 +282,66 @@ def test_mfe_ratchet_moves_to_breakeven_at_point_eight_r() -> None:
     assert stop == Decimal("100.05")
 
 
+def test_cost_aware_breakeven_locks_at_least_round_trip_cost() -> None:
+    # MFE ₹900 (qty 30, R ₹1,500) crosses the 0.5R breakeven but is below the 1.0R
+    # ratchet. Legacy lock is gross-flat (entry+tick) which nets a loss after costs.
+    legacy = compute_mfe_ratchet_stop(
+        Decimal("100"), Decimal("130"), 30,
+        risk_rupees=Decimal("1500"),
+        breakeven_at_r=Decimal("0.5"), ratchet_start_r=Decimal("1.0"),
+        ratchet_giveback_pct=Decimal("30"), ratchet_giveback_min_inr=Decimal("300"),
+        tick_size=Decimal("0.05"),
+    )
+    assert legacy == Decimal("100.05")  # gross-flat: nets negative once ₹150 cost is paid
+
+    cost_aware = compute_mfe_ratchet_stop(
+        Decimal("100"), Decimal("130"), 30,
+        risk_rupees=Decimal("1500"),
+        breakeven_at_r=Decimal("0.5"), ratchet_start_r=Decimal("1.0"),
+        ratchet_giveback_pct=Decimal("30"), ratchet_giveback_min_inr=Decimal("300"),
+        tick_size=Decimal("0.05"), round_trip_cost_inr=Decimal("150"),
+    )
+    # Lock ≥ round-trip cost so the net P&L at the breakeven stop is non-negative.
+    assert cost_aware == Decimal("105.00")  # entry + ₹150/30
+    locked_net = (cost_aware - Decimal("100")) * Decimal("30") - Decimal("150")
+    assert locked_net >= 0
+
+
+def test_cost_aware_breakeven_default_keeps_live_path_gross_flat() -> None:
+    # Omitting the cost arg must reproduce the pre-fix lock exactly (live monitor path).
+    assert compute_mfe_ratchet_stop(
+        Decimal("100"), Decimal("130"), 30,
+        risk_rupees=Decimal("1500"),
+        breakeven_at_r=Decimal("0.5"), ratchet_start_r=Decimal("1.0"),
+        ratchet_giveback_pct=Decimal("30"), ratchet_giveback_min_inr=Decimal("300"),
+        tick_size=Decimal("0.05"),
+    ) == Decimal("100.05")
+
+
+def test_earlier_ratchet_start_arms_before_the_one_r_threshold() -> None:
+    # MFE ₹1,200 on qty 30, R ₹1,500 -> 0.8R. Active 1.0R ratchet is NOT armed (lock
+    # is breakeven only); experimental 0.7R start IS armed and trails the MFE.
+    not_armed = compute_mfe_ratchet_stop(
+        Decimal("100"), Decimal("140"), 30,
+        risk_rupees=Decimal("1500"),
+        breakeven_at_r=Decimal("0.5"), ratchet_start_r=Decimal("1.0"),
+        ratchet_giveback_pct=Decimal("30"), ratchet_giveback_min_inr=Decimal("300"),
+        tick_size=Decimal("0.05"),
+    )
+    assert not_armed == Decimal("100.05")  # breakeven only
+
+    armed = compute_mfe_ratchet_stop(
+        Decimal("100"), Decimal("140"), 30,
+        risk_rupees=Decimal("1500"),
+        breakeven_at_r=Decimal("0.5"), ratchet_start_r=Decimal("0.7"),
+        ratchet_giveback_pct=Decimal("30"), ratchet_giveback_min_inr=Decimal("300"),
+        tick_size=Decimal("0.05"),
+    )
+    # lock = MFE - max(₹300, 30%*₹1,200=₹360) = ₹840 -> entry + ₹840/30
+    assert armed == Decimal("128.00")
+    assert armed > not_armed
+
+
 def test_stagnation_exit_after_30m_when_momentum_gone_and_pnl_below_point_three_r() -> None:
     now = datetime(2026, 6, 8, 10, 25, tzinfo=timezone.utc)
     entry_time = now - timedelta(minutes=31)

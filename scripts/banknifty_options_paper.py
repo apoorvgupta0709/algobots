@@ -1414,17 +1414,29 @@ def compute_mfe_ratchet_stop(
     ratchet_giveback_pct: Decimal,
     ratchet_giveback_min_inr: Decimal,
     tick_size: Decimal,
+    round_trip_cost_inr: Decimal = Decimal("0"),
 ) -> Decimal | None:
-    """R-based breakeven + MFE-ratchet trailing stop for long options."""
+    """R-based breakeven + MFE-ratchet trailing stop for long options.
+
+    ``round_trip_cost_inr`` makes the breakeven/ratchet lock *cost-aware*: the
+    locked stop is floored so the net P&L after round-trip brokerage/slippage is
+    non-negative, instead of locking a gross-flat stop that still nets a loss once
+    costs are subtracted at exit. Defaults to ``0`` so the live paper monitor path
+    is byte-for-byte unchanged; research/backtest paths opt in by passing the cost.
+    """
     if entry_premium <= 0 or quantity <= 0 or risk_rupees <= 0:
         return None
     mfe = (highest_premium - entry_premium) * Decimal(quantity)
     if mfe < risk_rupees * breakeven_at_r:
         return None
-    locked_pnl = tick_size * Decimal(quantity)  # breakeven + one tick as cost proxy
+    # Breakeven floor: at least one tick (gross-flat proxy) and at least the
+    # round-trip cost so a "breakeven" lock nets >= 0 after costs, not gross-flat.
+    locked_pnl = max(tick_size * Decimal(quantity), round_trip_cost_inr)
     if mfe >= risk_rupees * ratchet_start_r:
         giveback = max(ratchet_giveback_min_inr, mfe * ratchet_giveback_pct / Decimal("100"))
         locked_pnl = max(locked_pnl, mfe - giveback)
+    # Never lock a stop above the captured MFE (a thin MFE can be below the cost floor).
+    locked_pnl = min(locked_pnl, mfe)
     return floor_to_tick(entry_premium + (locked_pnl / Decimal(quantity)), tick_size)
 
 
