@@ -317,6 +317,10 @@ class QualificationCriteria:
     def from_dict(cls, data: dict[str, Any] | None) -> QualificationCriteria:
         if not data:
             return cls()
+        # Accept both a flat criteria dict and a config file that nests the
+        # thresholds under a "criteria" key (config/strategy_qualification.json).
+        if isinstance(data.get("criteria"), dict):
+            data = data["criteria"]
         defaults = cls()
         return cls(
             min_closed_trades=int(data.get("min_closed_trades", defaults.min_closed_trades)),

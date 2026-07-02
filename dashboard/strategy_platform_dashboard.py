@@ -19,6 +19,7 @@ Run with:
 from __future__ import annotations
 
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -32,6 +33,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.strategy_registry import (  # noqa: E402
+    LIFECYCLE_ORDER,
     Desk,
     DeskInfo,
     LifecycleStatus,
@@ -78,28 +80,42 @@ class SafetyCheck:
 # --------------------------------------------------------------------------- #
 # Read-only SQL guard (defense-in-depth, mirrors the BankNifty dashboard)
 # --------------------------------------------------------------------------- #
-def assert_readonly_sql(sql: str) -> None:
-    import re
+SQL_WRITE_RE = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|MERGE)\b|"
+    r"\bREFRESH\s+MATERIALIZED\s+VIEW\b|"
+    r"\b(pg_read_file|pg_read_binary_file|pg_ls_dir|lo_get)\b",
+    re.IGNORECASE,
+)
 
+
+def is_read_only_sql(sql: str) -> bool:
+    """Return True only for a single SELECT/WITH/SHOW statement with no write tokens."""
+    if "\x00" in sql:
+        return False
+    stripped = sql.strip()
+    lowered = stripped.lower()
+    if not lowered.startswith(("select", "with", "show")):
+        return False
+    statements = [part.strip() for part in stripped.split(";") if part.strip()]
+    return len(statements) == 1 and SQL_WRITE_RE.search(stripped) is None
+
+
+def assert_readonly_sql(sql: str) -> None:
     if "\x00" in sql:
         raise DashboardError("Dashboard SQL must not contain NUL bytes")
-    stripped = sql.strip().lower()
-    if not stripped.startswith(("select", "with", "show")):
+    stripped = sql.strip()
+    if not stripped.lower().startswith(("select", "with", "show")):
         raise DashboardError("Dashboard SQL must be read-only SELECT/WITH/SHOW")
-    banned = (
-        r"insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|"
-        r"refresh\s+materialized\s+view|pg_read_file|pg_read_binary_file|pg_ls_dir|lo_get"
-    )
-    if re.search(rf"\b({banned})\b", stripped):
-        raise DashboardError("Dashboard SQL contains a banned write/DDL/superuser token")
     statements = [part.strip() for part in stripped.split(";") if part.strip()]
     if len(statements) > 1:
         raise DashboardError("Dashboard SQL must contain exactly one read-only statement")
+    if SQL_WRITE_RE.search(stripped):
+        raise DashboardError("Dashboard SQL contains a banned write/DDL/superuser token")
 
 
 def database_url() -> str:
-    # Read only from the process environment; this dashboard never reads the .env
-    # file. Prefer an explicit read-only DSN, else the least-privilege loopback role.
+    # Read only from process environment variables; never load local dotenv files.
+    # Prefer an explicit read-only DSN, else the least-privilege loopback role.
     return os.getenv("STRATEGY_DASHBOARD_DATABASE_URL", os.getenv("DASHBOARD_DATABASE_URL", DEFAULT_DATABASE_URL))
 
 
@@ -295,6 +311,132 @@ def inr(value: Any) -> str:
         return str(value)
     sign = "-" if amount < 0 else ""
     return f"{sign}₹{abs(amount):,.2f}"
+
+
+def markdown_table(headers: list[str], rows: Iterable[Iterable[Any]]) -> str:
+    """Render a GitHub-flavoured Markdown table (dependency-free, testable)."""
+    out = ["| " + " | ".join(headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]
+    for row in rows:
+        out.append("| " + " | ".join(str(cell) for cell in row) + " |")
+    return "\n".join(out)
+
+
+def desk_summary(universe: StrategyUniverse) -> list[dict[str, Any]]:
+    """Per-desk counts (total / executable / scorecard-only)."""
+    rows: list[dict[str, Any]] = []
+    for desk in Desk:
+        strategies = universe.by_desk(desk)
+        if not strategies:
+            continue
+        info = universe.desks.get(desk)
+        executable = sum(1 for s in strategies if s.executable)
+        rows.append({
+            "desk": desk.value,
+            "name": info.name if info else desk.value,
+            "total": len(strategies),
+            "executable": executable,
+            "scorecard_only": len(strategies) - executable,
+        })
+    return rows
+
+
+def lifecycle_funnel(universe: StrategyUniverse) -> list[tuple[str, int]]:
+    """The backtest -> paper -> qualified funnel, in canonical lifecycle order."""
+    histogram = universe.lifecycle_histogram()
+    return [(status.value, histogram.get(status.value, 0)) for status in LIFECYCLE_ORDER]
+
+
+def matches_query(strategy: StrategyDefinition, query: str) -> bool:
+    """Case-insensitive AND-of-terms match across a strategy's searchable fields."""
+    terms = query.strip().lower().split()
+    if not terms:
+        return True
+    haystack = " ".join([
+        strategy.id, strategy.name, strategy.family, strategy.desk.value,
+        strategy.instrument.value, strategy.timeframe.value, strategy.direction.value,
+        strategy.structure.value, strategy.lifecycle_status.value, " ".join(strategy.tags),
+    ]).lower()
+    return all(term in haystack for term in terms)
+
+
+def search_strategies(universe: StrategyUniverse, query: str) -> list[StrategyDefinition]:
+    return [s for s in universe.strategies if matches_query(s, query)]
+
+
+def catalog_rows(
+    strategies: Iterable[StrategyDefinition],
+    trades: Iterable[PaperTrade],
+    *,
+    window: TrialWindow | None = None,
+    criteria: QualificationCriteria | None = None,
+) -> list[dict[str, Any]]:
+    """One flat, searchable row per strategy with its paper-trial state (read-only)."""
+    trades = list(trades)
+    window = window or infer_trial_window(trades)
+    criteria = criteria or QualificationCriteria()
+    rows: list[dict[str, Any]] = []
+    for s in strategies:
+        closed = 0
+        net_pnl = "n/a"
+        trial = "scorecard-only"
+        if s.executable:
+            metrics = compute_metrics(s.id, trades)
+            evaluation = evaluate_trial(
+                s.id, trades, window=window, criteria=criteria, current_status=s.lifecycle_status
+            )
+            closed = metrics.closed_trades
+            net_pnl = f"{metrics.net_pnl:.2f}"
+            trial = "no paper trades yet" if closed == 0 else ("PASS" if evaluation.passed else "FAIL")
+        rows.append({
+            "id": s.id,
+            "name": s.name,
+            "desk": s.desk.value,
+            "family": s.family,
+            "instrument": s.instrument.value,
+            "timeframe": s.timeframe.value,
+            "structure": s.structure.value,
+            "executable": s.executable,
+            "option_selling": s.option_selling,
+            "lifecycle": s.lifecycle_status.value,
+            "closed_trades": closed,
+            "net_pnl": net_pnl,
+            "trial": trial,
+        })
+    return rows
+
+
+def running_summary(trades: Iterable[PaperTrade]) -> list[dict[str, Any]]:
+    """Aggregate 'what is running' from paper-trade rows: open/closed/net P&L per strategy.
+
+    Purely derived from the read-only paper-trade rows (DB or sample). No writes.
+    """
+    agg: dict[str, dict[str, Any]] = {}
+    for trade in trades:
+        record = agg.setdefault(trade.strategy_id, {
+            "strategy_id": trade.strategy_id, "open_positions": 0,
+            "closed_trades": 0, "net_pnl": Decimal("0"), "last_activity": None,
+        })
+        if trade.status == "open":
+            record["open_positions"] += 1
+        if trade.is_closed:
+            record["closed_trades"] += 1
+            if trade.realized_pnl is not None:
+                record["net_pnl"] += trade.realized_pnl
+        for stamp in (trade.exit_time, trade.entry_time):
+            if stamp is not None and (record["last_activity"] is None or stamp > record["last_activity"]):
+                record["last_activity"] = stamp
+    rows: list[dict[str, Any]] = []
+    for strategy_id in sorted(agg):
+        record = agg[strategy_id]
+        last = record["last_activity"]
+        rows.append({
+            "strategy_id": strategy_id,
+            "open_positions": record["open_positions"],
+            "closed_trades": record["closed_trades"],
+            "net_realized_pnl": f"{record['net_pnl']:.2f}",
+            "last_activity": last.astimezone(IST).strftime("%Y-%m-%d %H:%M") if last else "—",
+        })
+    return rows
 
 
 # --------------------------------------------------------------------------- #

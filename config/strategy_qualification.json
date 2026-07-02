@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "paper_only": true,
+  "live_orders_enabled": false,
+  "notes": "One-month paper-trial qualification thresholds for the India strategy platform. A passing trial can only RECOMMEND advancing to `qualified`. Promotion to `live_eligible_requires_manual_approval` is never automatic: it requires an explicit human approval (grant_live_eligibility) and still enables no broker order code anywhere in this repository.",
+  "paper_trial_calendar_months": 1,
+  "criteria": {
+    "min_closed_trades": 15,
+    "min_trading_days": 10,
+    "min_win_rate": "40",
+    "min_profit_factor": "1.20",
+    "min_net_pnl": "0",
+    "max_drawdown": "6000",
+    "min_expectancy": "0"
+  },
+  "criteria_descriptions": {
+    "min_closed_trades": "Minimum closed paper trades in the one-month window for statistical meaning.",
+    "min_trading_days": "Minimum distinct trading days, so results are not one lucky session.",
+    "min_win_rate": "Minimum win-rate percent (0-100).",
+    "min_profit_factor": "Minimum gross-profit / gross-loss ratio (a strategy with no losing trades passes automatically).",
+    "min_net_pnl": "Minimum net realized P&L in rupees over the trial.",
+    "max_drawdown": "Maximum tolerated peak-to-trough drawdown in rupees on the realized-equity curve.",
+    "min_expectancy": "Minimum expected P&L per trade in rupees."
+  },
+  "manual_live_approval_gate": {
+    "required": true,
+    "preconditions": [
+      "strategy is executable (scorecard-only strategies can never be made live-eligible)",
+      "strategy lifecycle_status is currently `qualified`",
+      "a named human approver is recorded",
+      "the exact confirmation phrase `APPROVE LIVE ELIGIBILITY <strategy_id>` is typed",
+      "an explicit acknowledgement flag is set"
+    ],
+    "effect": "Grants the governance label `live_eligible_requires_manual_approval` only. No broker order-placement, modification, cancellation, or exit code is enabled by this approval."
+  }
+}

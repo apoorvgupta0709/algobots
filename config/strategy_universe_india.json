@@ -43,8 +43,21 @@
         "abort if index crosses pivot >= 3 times by 10:15"
       ],
       "rationale": "BankNifty is heavily driven by a handful of large private banks; when constituents align, the index trends cleanly. Debit spreads keep the theta and IV cost drag defined while still capturing directional moves.",
-      "data_requirements": ["5m OHLCV index", "prev-day OHLC", "banking constituent breadth", "India VIX", "option chain near-ATM", "event calendar"],
-      "tags": ["banknifty", "debit_spread", "directional", "intraday", "defined_risk"],
+      "data_requirements": [
+        "5m OHLCV index",
+        "prev-day OHLC",
+        "banking constituent breadth",
+        "India VIX",
+        "option chain near-ATM",
+        "event calendar"
+      ],
+      "tags": [
+        "banknifty",
+        "debit_spread",
+        "directional",
+        "intraday",
+        "defined_risk"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -79,8 +92,21 @@
         "net debit x lot <= trade-loss cap"
       ],
       "rationale": "Nifty's lower per-point value and tight weekly spreads make ATM-plus-one debit structures the cheapest way to express intraday direction while respecting the rupee risk envelope and STT drag.",
-      "data_requirements": ["5m OHLCV index", "VWAP", "opening-range levels", "India VIX", "Nifty weekly option chain", "event calendar"],
-      "tags": ["nifty", "debit_spread", "directional", "intraday", "defined_risk"],
+      "data_requirements": [
+        "5m OHLCV index",
+        "VWAP",
+        "opening-range levels",
+        "India VIX",
+        "Nifty weekly option chain",
+        "event calendar"
+      ],
+      "tags": [
+        "nifty",
+        "debit_spread",
+        "directional",
+        "intraday",
+        "defined_risk"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -114,8 +140,19 @@
         "skip event days"
       ],
       "rationale": "The first 30 minutes on the NSE set the day's balance; a decisive break of that range with volume expansion has historically initiated trend days. Debit spreads bound the premium risk on failed breakouts.",
-      "data_requirements": ["5m OHLCV index", "opening-range levels", "volume proxy", "India VIX", "option chain"],
-      "tags": ["orb", "breakout", "debit_spread", "intraday"],
+      "data_requirements": [
+        "5m OHLCV index",
+        "opening-range levels",
+        "volume proxy",
+        "India VIX",
+        "option chain"
+      ],
+      "tags": [
+        "orb",
+        "breakout",
+        "debit_spread",
+        "intraday"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -150,8 +187,21 @@
         "avoid last 3 sessions before BankNifty monthly expiry"
       ],
       "rationale": "A narrow overnight CPR compresses the prior-session balance and often precedes expansion; combining it with a VWAP-side filter reduces whipsaw on the many NSE range days.",
-      "data_requirements": ["prev-day OHLC", "CPR levels", "5m OHLCV index", "VWAP", "India VIX", "option chain"],
-      "tags": ["cpr", "vwap", "trend_day", "debit_spread", "intraday"],
+      "data_requirements": [
+        "prev-day OHLC",
+        "CPR levels",
+        "5m OHLCV index",
+        "VWAP",
+        "India VIX",
+        "option chain"
+      ],
+      "tags": [
+        "cpr",
+        "vwap",
+        "trend_day",
+        "debit_spread",
+        "intraday"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -186,8 +236,21 @@
         "one morning entry; re-entry only if separately backtested"
       ],
       "rationale": "On expiry, ATM gamma is highest early in the session while theta accelerates into the afternoon; capturing a morning directional break with a hard midday cutoff harvests gamma before decay dominates.",
-      "data_requirements": ["5m OHLCV index", "VWAP", "opening-range levels", "India VIX", "expiry calendar", "option chain"],
-      "tags": ["expiry", "gamma", "directional", "defined_risk", "intraday"],
+      "data_requirements": [
+        "5m OHLCV index",
+        "VWAP",
+        "opening-range levels",
+        "India VIX",
+        "expiry calendar",
+        "option chain"
+      ],
+      "tags": [
+        "expiry",
+        "gamma",
+        "directional",
+        "defined_risk",
+        "intraday"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -222,8 +285,21 @@
         "skip event days"
       ],
       "rationale": "On the frequent NSE range days, price oscillates around VWAP; fading statistically stretched moves toward VWAP offers a high-hit-rate mean-reversion edge, taken long-only to keep risk defined.",
-      "data_requirements": ["1m/5m OHLCV index", "VWAP + sigma bands", "RSI-9", "range-day label", "India VIX", "option chain"],
-      "tags": ["vwap", "mean_reversion", "range_day", "long", "intraday"],
+      "data_requirements": [
+        "1m/5m OHLCV index",
+        "VWAP + sigma bands",
+        "RSI-9",
+        "range-day label",
+        "India VIX",
+        "option chain"
+      ],
+      "tags": [
+        "vwap",
+        "mean_reversion",
+        "range_day",
+        "long",
+        "intraday"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -257,8 +333,20 @@
         "flag very wide option spreads"
       ],
       "rationale": "A correct directional view can still lose if IV is too expensive or collapses post-entry; encoding an IV/event gate as a reusable filter improves selectivity across every long-option strategy.",
-      "data_requirements": ["India VIX", "option IV surface", "expiry calendar", "event calendar", "option bid/ask spread"],
-      "tags": ["volatility", "iv", "filter", "scorecard", "risk_gate"],
+      "data_requirements": [
+        "India VIX",
+        "option IV surface",
+        "expiry calendar",
+        "event calendar",
+        "option bid/ask spread"
+      ],
+      "tags": [
+        "volatility",
+        "iv",
+        "filter",
+        "scorecard",
+        "risk_gate"
+      ],
       "risk": null
     },
     {
@@ -284,8 +372,21 @@
         "sufficient time to expiry to limit theta bleed"
       ],
       "rationale": "Long straddles are long-vega/long-gamma but carry heavy theta and combined-premium breakevens; kept scorecard-only because two-leg vol timing needs modelling before any execution consideration.",
-      "data_requirements": ["option chain ATM", "combined premium series", "India VIX", "realised vol", "event calendar", "expiry calendar"],
-      "tags": ["straddle", "volatility", "long_vega", "scorecard", "non_executable"],
+      "data_requirements": [
+        "option chain ATM",
+        "combined premium series",
+        "India VIX",
+        "realised vol",
+        "event calendar",
+        "expiry calendar"
+      ],
+      "tags": [
+        "straddle",
+        "volatility",
+        "long_vega",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -312,8 +413,22 @@
         "no new study entries after 14:45"
       ],
       "rationale": "Short straddles harvest theta in quiet regimes but carry unlimited/undefined tail risk and gap risk; retained only as a research scorecard until margin, gap, and slippage are fully modelled. Never executable per safety rails.",
-      "data_requirements": ["option chain ATM", "combined premium series", "option VWAP proxy", "5m ADX/DMI/RSI index", "India VIX", "constituent breadth"],
-      "tags": ["straddle", "short_premium", "theta", "scorecard", "non_executable", "undefined_risk"],
+      "data_requirements": [
+        "option chain ATM",
+        "combined premium series",
+        "option VWAP proxy",
+        "5m ADX/DMI/RSI index",
+        "India VIX",
+        "constituent breadth"
+      ],
+      "tags": [
+        "straddle",
+        "short_premium",
+        "theta",
+        "scorecard",
+        "non_executable",
+        "undefined_risk"
+      ],
       "risk": null
     },
     {
@@ -340,8 +455,21 @@
         "requires margin and tail-risk model before any consideration"
       ],
       "rationale": "Short strangles widen the profit zone versus straddles but still carry undefined tail and gap risk; kept scorecard-only for research. Never executable per safety rails.",
-      "data_requirements": ["option chain OTM both sides", "open-interest by strike", "support/resistance levels", "India VIX", "expiry calendar"],
-      "tags": ["strangle", "short_premium", "theta", "scorecard", "non_executable", "undefined_risk"],
+      "data_requirements": [
+        "option chain OTM both sides",
+        "open-interest by strike",
+        "support/resistance levels",
+        "India VIX",
+        "expiry calendar"
+      ],
+      "tags": [
+        "strangle",
+        "short_premium",
+        "theta",
+        "scorecard",
+        "non_executable",
+        "undefined_risk"
+      ],
       "risk": null
     },
     {
@@ -367,8 +495,20 @@
         "adequate time to expiry"
       ],
       "rationale": "Long strangles are cheaper long-vega than straddles with wider breakevens; retained scorecard-only because any straddle/strangle structure is non-executable under the safety rails.",
-      "data_requirements": ["option chain OTM both sides", "combined premium series", "India VIX", "realised vol", "event calendar"],
-      "tags": ["strangle", "long_vega", "volatility", "scorecard", "non_executable"],
+      "data_requirements": [
+        "option chain OTM both sides",
+        "combined premium series",
+        "India VIX",
+        "realised vol",
+        "event calendar"
+      ],
+      "tags": [
+        "strangle",
+        "long_vega",
+        "volatility",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -395,8 +535,20 @@
         "requires margin and assignment/pin-risk model"
       ],
       "rationale": "Iron condors are theta-positive with capped per-side loss, but they are net short premium and carry pin/gap risk near expiry; kept scorecard-only. Never executable because it involves option selling and a condor structure.",
-      "data_requirements": ["option chain both sides", "open-interest by strike", "expected-range estimate", "India VIX", "expiry calendar"],
-      "tags": ["iron_condor", "short_premium", "theta", "scorecard", "non_executable"],
+      "data_requirements": [
+        "option chain both sides",
+        "open-interest by strike",
+        "expected-range estimate",
+        "India VIX",
+        "expiry calendar"
+      ],
+      "tags": [
+        "iron_condor",
+        "short_premium",
+        "theta",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -422,8 +574,20 @@
         "requires tail-risk and margin model"
       ],
       "rationale": "Ratio structures express skew and vol views cheaply but leave a naked short tail beyond the extra written legs; retained scorecard-only. Never executable because it is a ratio structure with net option selling.",
-      "data_requirements": ["option chain multiple strikes", "volatility skew", "India VIX", "expiry calendar"],
-      "tags": ["ratio", "skew", "short_premium", "scorecard", "non_executable", "undefined_risk"],
+      "data_requirements": [
+        "option chain multiple strikes",
+        "volatility skew",
+        "India VIX",
+        "expiry calendar"
+      ],
+      "tags": [
+        "ratio",
+        "skew",
+        "short_premium",
+        "scorecard",
+        "non_executable",
+        "undefined_risk"
+      ],
       "risk": null
     },
     {
@@ -451,8 +615,21 @@
         "India VIX not spiking"
       ],
       "rationale": "Breakout retests filter out fakeouts common in the first hour on the NSE; buying the hold of prior resistance gives a tighter stop and better reward, reducing cost drag from churn.",
-      "data_requirements": ["1m/5m OHLCV equity", "opening-range levels", "VWAP", "sector index", "event calendar"],
-      "tags": ["orb", "retest", "breakout", "equity", "intraday", "long"],
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "opening-range levels",
+        "VWAP",
+        "sector index",
+        "event calendar"
+      ],
+      "tags": [
+        "orb",
+        "retest",
+        "breakout",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -487,8 +664,21 @@
         "avoid names near circuit bands"
       ],
       "rationale": "VWAP is the institutional intraday benchmark on the NSE; on trend days price repeatedly finds support at VWAP, so buying controlled dips there aligns with the dominant flow at low churn.",
-      "data_requirements": ["1m/5m OHLCV equity", "VWAP + slope", "sector index", "trend-day label", "event calendar"],
-      "tags": ["vwap", "trend", "pullback", "equity", "intraday", "long"],
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "VWAP + slope",
+        "sector index",
+        "trend-day label",
+        "event calendar"
+      ],
+      "tags": [
+        "vwap",
+        "trend",
+        "pullback",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -523,8 +713,21 @@
         "adequate liquidity for exit"
       ],
       "rationale": "On range days, liquid stocks oscillate around VWAP; buying statistically stretched dislocations offers a high-probability reversion, taken long-only to avoid short-sale and borrow complications.",
-      "data_requirements": ["1m/5m OHLCV equity", "VWAP + sigma bands", "RSI-9", "range-day label", "sector index"],
-      "tags": ["vwap", "mean_reversion", "range_day", "equity", "intraday", "long"],
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "VWAP + sigma bands",
+        "RSI-9",
+        "range-day label",
+        "sector index"
+      ],
+      "tags": [
+        "vwap",
+        "mean_reversion",
+        "range_day",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -559,8 +762,22 @@
         "avoid names at upper circuit"
       ],
       "rationale": "Gap-ups backed by follow-through above VWAP reflect genuine demand and often trend for the session on the NSE; requiring the OR/VWAP hold filters exhaustion gaps that fade.",
-      "data_requirements": ["prev-day close", "1m/5m OHLCV equity", "VWAP", "opening-range levels", "gap %", "event calendar"],
-      "tags": ["gap", "continuation", "momentum", "equity", "intraday", "long"],
+      "data_requirements": [
+        "prev-day close",
+        "1m/5m OHLCV equity",
+        "VWAP",
+        "opening-range levels",
+        "gap %",
+        "event calendar"
+      ],
+      "tags": [
+        "gap",
+        "continuation",
+        "momentum",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -595,8 +812,22 @@
         "avoid names at lower circuit"
       ],
       "rationale": "Panic gap-downs on the NSE frequently over-shoot and partially fill intraday; requiring an OR reclaim and VWAP cross avoids catching a genuine breakdown, keeping the fade long-only and defined.",
-      "data_requirements": ["prev-day close", "1m/5m OHLCV equity", "VWAP", "opening-range levels", "gap %", "event/news feed"],
-      "tags": ["gap", "fade", "mean_reversion", "equity", "intraday", "long"],
+      "data_requirements": [
+        "prev-day close",
+        "1m/5m OHLCV equity",
+        "VWAP",
+        "opening-range levels",
+        "gap %",
+        "event/news feed"
+      ],
+      "tags": [
+        "gap",
+        "fade",
+        "mean_reversion",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -631,8 +862,21 @@
         "avoid circuit-bound names"
       ],
       "rationale": "A narrow CPR compresses the prior session's value area; a clean break with broad-market confirmation biases the name toward a trend day, giving a defined pivot stop.",
-      "data_requirements": ["prev-day OHLC", "CPR levels", "5m OHLCV equity", "index pivot", "event calendar"],
-      "tags": ["cpr", "trend_day", "breakout", "equity", "intraday", "long"],
+      "data_requirements": [
+        "prev-day OHLC",
+        "CPR levels",
+        "5m OHLCV equity",
+        "index pivot",
+        "event calendar"
+      ],
+      "tags": [
+        "cpr",
+        "trend_day",
+        "breakout",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -667,8 +911,22 @@
         "respect per-trade rupee risk"
       ],
       "rationale": "Indian sector cycles (banks, IT, auto, PSU, pharma) rotate with distinct leadership; buying the strongest name in the strongest sector rides institutional accumulation while relative-strength decay gives a clean exit.",
-      "data_requirements": ["daily OHLCV equities", "sector indices", "Nifty index", "relative-strength ranks", "moving averages", "earnings calendar"],
-      "tags": ["relative_strength", "sector", "leadership", "swing", "equity", "long"],
+      "data_requirements": [
+        "daily OHLCV equities",
+        "sector indices",
+        "Nifty index",
+        "relative-strength ranks",
+        "moving averages",
+        "earnings calendar"
+      ],
+      "tags": [
+        "relative_strength",
+        "sector",
+        "leadership",
+        "swing",
+        "equity",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -703,8 +961,21 @@
         "adequate depth for exit"
       ],
       "rationale": "Volume precedes price; an abnormal surge on the NSE often marks the arrival of new information or institutional interest, and pairing it with a level break filters random spikes.",
-      "data_requirements": ["1m/5m OHLCV equity", "time-of-day volume profile", "relative volume", "VWAP", "news/event feed"],
-      "tags": ["volume", "relative_volume", "breakout", "equity", "intraday", "long"],
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "time-of-day volume profile",
+        "relative volume",
+        "VWAP",
+        "news/event feed"
+      ],
+      "tags": [
+        "volume",
+        "relative_volume",
+        "breakout",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -738,8 +1009,20 @@
         "block long-side signals on negative-breadth days"
       ],
       "rationale": "Intraday long edges decay sharply on negative-breadth days; a reusable breadth gate improves the hit rate and sizing of every long strategy without itself taking positions.",
-      "data_requirements": ["advance/decline line", "constituent VWAP states", "sector index breadth", "Nifty/BankNifty context"],
-      "tags": ["breadth", "regime", "filter", "scorecard", "risk_gate", "non_executable"],
+      "data_requirements": [
+        "advance/decline line",
+        "constituent VWAP states",
+        "sector index breadth",
+        "Nifty/BankNifty context"
+      ],
+      "tags": [
+        "breadth",
+        "regime",
+        "filter",
+        "scorecard",
+        "risk_gate",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -767,8 +1050,21 @@
         "sufficient liquidity on both legs"
       ],
       "rationale": "Same-sector Indian large caps often move together; when their spread dislocates without a fundamental cause it tends to revert. A market-neutral structure isolates the relative move from broad-market direction. Short leg is simulated only under the paper-only mandate.",
-      "data_requirements": ["daily/intraday OHLCV both legs", "spread & z-score series", "cointegration test", "beta estimate", "corporate-action calendar"],
-      "tags": ["pairs", "market_neutral", "statistical_arbitrage", "mean_reversion", "swing", "equity"],
+      "data_requirements": [
+        "daily/intraday OHLCV both legs",
+        "spread & z-score series",
+        "cointegration test",
+        "beta estimate",
+        "corporate-action calendar"
+      ],
+      "tags": [
+        "pairs",
+        "market_neutral",
+        "statistical_arbitrage",
+        "mean_reversion",
+        "swing",
+        "equity"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -803,8 +1099,22 @@
         "avoid circuit-bound names"
       ],
       "rationale": "Requiring both stock and index confirmation filters out isolated, unsustainable pops; demanding the stock beat the index isolates true relative leadership, which persists better intraday on the NSE.",
-      "data_requirements": ["1m/5m OHLCV equity", "VWAP", "opening-range levels", "confirming index", "India VIX", "earnings calendar"],
-      "tags": ["momentum", "index_confirmation", "breakout", "equity", "intraday", "long"],
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "VWAP",
+        "opening-range levels",
+        "confirming index",
+        "India VIX",
+        "earnings calendar"
+      ],
+      "tags": [
+        "momentum",
+        "index_confirmation",
+        "breakout",
+        "equity",
+        "intraday",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -839,8 +1149,21 @@
         "respect per-trade rupee risk"
       ],
       "rationale": "Quality Indian large caps mean-revert within uptrends; buying oversold dips in an intact trend captures the bounce with the primary trend as a tailwind and the 50-DMA as a clean invalidation.",
-      "data_requirements": ["daily OHLCV equity", "50-DMA", "RSI/oscillator", "Nifty regime", "earnings calendar"],
-      "tags": ["mean_reversion", "large_cap", "pullback", "swing", "equity", "long"],
+      "data_requirements": [
+        "daily OHLCV equity",
+        "50-DMA",
+        "RSI/oscillator",
+        "Nifty regime",
+        "earnings calendar"
+      ],
+      "tags": [
+        "mean_reversion",
+        "large_cap",
+        "pullback",
+        "swing",
+        "equity",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -874,8 +1197,21 @@
         "broad-market regime not in sharp downtrend"
       ],
       "rationale": "ETFs let the platform express sector rotation with lower idiosyncratic and gap risk than single stocks, while liquidity screening avoids the wide spreads common in thin Indian ETFs that erode edge via cost drag.",
-      "data_requirements": ["daily OHLCV ETFs", "momentum/RS ranks", "moving averages", "liquidity/turnover", "underlying index context"],
-      "tags": ["etf", "momentum", "rotation", "swing", "long", "diversified"],
+      "data_requirements": [
+        "daily OHLCV ETFs",
+        "momentum/RS ranks",
+        "moving averages",
+        "liquidity/turnover",
+        "underlying index context"
+      ],
+      "tags": [
+        "etf",
+        "momentum",
+        "rotation",
+        "swing",
+        "long",
+        "diversified"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "1500",
@@ -909,8 +1245,20 @@
         "size within per-position rupee risk"
       ],
       "rationale": "The 50/200 DMA relationship is a robust, low-turnover regime proxy that keeps capital in durable uptrends and out of bear phases, sidestepping the whipsaw and cost drag of faster signals on Indian equities.",
-      "data_requirements": ["daily OHLCV equity", "50-DMA", "200-DMA", "weekly trend confirmation"],
-      "tags": ["dma", "trend_following", "golden_cross", "long_term", "positional", "long"],
+      "data_requirements": [
+        "daily OHLCV equity",
+        "50-DMA",
+        "200-DMA",
+        "weekly trend confirmation"
+      ],
+      "tags": [
+        "dma",
+        "trend_following",
+        "golden_cross",
+        "long_term",
+        "positional",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "2500",
@@ -943,8 +1291,20 @@
         "fixed contribution cadence"
       ],
       "rationale": "Rupee-cost averaging into a broad index is the honest benchmark for Indian long-term investing; making it a first-class, executable baseline forces every discretionary or systematic strategy to justify its added cost and complexity against passive compounding.",
-      "data_requirements": ["daily OHLCV index ETF", "contribution schedule", "expense ratio", "unit accounting"],
-      "tags": ["sip", "buy_and_hold", "benchmark", "passive", "long_term", "long"],
+      "data_requirements": [
+        "daily OHLCV index ETF",
+        "contribution schedule",
+        "expense ratio",
+        "unit accounting"
+      ],
+      "tags": [
+        "sip",
+        "buy_and_hold",
+        "benchmark",
+        "passive",
+        "long_term",
+        "long"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "0",
@@ -978,8 +1338,24 @@
         "sector-relative normalisation"
       ],
       "rationale": "Blending complementary factors reduces single-factor drawdowns and tilts toward durable Indian compounders; kept scorecard-only because it requires a populated fundamentals engine and portfolio accounting before it could size positions.",
-      "data_requirements": ["fundamental statements", "ROE/leverage/margins", "valuation ratios", "earnings/sales growth", "sector classification", "liquidity"],
-      "tags": ["factor", "quality", "value", "growth", "composite", "long_term", "scorecard", "non_executable"],
+      "data_requirements": [
+        "fundamental statements",
+        "ROE/leverage/margins",
+        "valuation ratios",
+        "earnings/sales growth",
+        "sector classification",
+        "liquidity"
+      ],
+      "tags": [
+        "factor",
+        "quality",
+        "value",
+        "growth",
+        "composite",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -1006,8 +1382,21 @@
         "diversification cap per sector"
       ],
       "rationale": "Indian sector leadership rotates over months with the macro and rate cycle; a disciplined momentum-tilted allocation study captures those regimes, but must first model rebalance cost drag before it could allocate paper capital.",
-      "data_requirements": ["sector index/ETF history", "momentum ranks", "turnover/cost estimates", "correlation matrix"],
-      "tags": ["sector_rotation", "allocation", "momentum", "portfolio", "positional", "scorecard", "non_executable"],
+      "data_requirements": [
+        "sector index/ETF history",
+        "momentum ranks",
+        "turnover/cost estimates",
+        "correlation matrix"
+      ],
+      "tags": [
+        "sector_rotation",
+        "allocation",
+        "momentum",
+        "portfolio",
+        "positional",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -1034,8 +1423,21 @@
         "leverage disabled (long-only, unlevered)"
       ],
       "rationale": "Risk parity balances contribution to portfolio volatility rather than capital, historically smoothing drawdowns across regimes; retained as an allocation study since it operates at portfolio level and needs full accounting before deployment.",
-      "data_requirements": ["multi-asset ETF history", "volatility estimates", "correlation/covariance matrix", "rebalance schedule"],
-      "tags": ["risk_parity", "allocation", "multi_asset", "portfolio", "long_term", "scorecard", "non_executable"],
+      "data_requirements": [
+        "multi-asset ETF history",
+        "volatility estimates",
+        "correlation/covariance matrix",
+        "rebalance schedule"
+      ],
+      "tags": [
+        "risk_parity",
+        "allocation",
+        "multi_asset",
+        "portfolio",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -1062,8 +1464,21 @@
         "long-only, unlevered"
       ],
       "rationale": "Capping drawdown via volatility targeting improves the compounding path and behavioural durability through Indian bear phases; kept scorecard-only as a portfolio overlay pending full backtest accounting and cost modelling.",
-      "data_requirements": ["portfolio equity curve", "realised volatility", "drawdown series", "defensive-asset ETF history"],
-      "tags": ["drawdown_control", "volatility_targeting", "allocation", "portfolio", "long_term", "scorecard", "non_executable"],
+      "data_requirements": [
+        "portfolio equity curve",
+        "realised volatility",
+        "drawdown series",
+        "defensive-asset ETF history"
+      ],
+      "tags": [
+        "drawdown_control",
+        "volatility_targeting",
+        "allocation",
+        "portfolio",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     },
     {
@@ -1090,8 +1505,18 @@
         "positional/long-term cadence"
       ],
       "rationale": "The 200-DMA is a widely respected long-term regime line on Indian indices; a disciplined above/below rule sidesteps the worst of bear markets at low turnover, an honest, transparent complement to the SIP baseline.",
-      "data_requirements": ["daily/weekly OHLCV index ETF", "200-DMA + slope"],
-      "tags": ["dma", "regime_timing", "index", "long_term", "long", "trend_following"],
+      "data_requirements": [
+        "daily/weekly OHLCV index ETF",
+        "200-DMA + slope"
+      ],
+      "tags": [
+        "dma",
+        "regime_timing",
+        "index",
+        "long_term",
+        "long",
+        "trend_following"
+      ],
       "risk": {
         "paper_capital": "50000",
         "max_trade_loss": "2500",
@@ -1125,8 +1550,1640 @@
         "edge distinguishable from random benchmark"
       ],
       "rationale": "In-sample results routinely flatter noisy strategies; a mandatory robustness gate protects paper capital and research credibility by demanding evidence of a durable edge before promotion. Purely analytical, so non-executable.",
-      "data_requirements": ["candidate backtest trade log", "parameter grid results", "out-of-sample splits", "randomised/shuffled benchmarks"],
-      "tags": ["robustness", "overfitting", "validation", "governance", "scorecard", "non_executable"],
+      "data_requirements": [
+        "candidate backtest trade log",
+        "parameter grid results",
+        "out-of-sample splits",
+        "randomised/shuffled benchmarks"
+      ],
+      "tags": [
+        "robustness",
+        "overfitting",
+        "validation",
+        "governance",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "finnifty_weekly_debit_spread_directional",
+      "name": "FINNIFTY Weekly Directional Debit Spread",
+      "desk": "options",
+      "family": "debit_spread",
+      "instrument": "index_option",
+      "timeframe": "intraday",
+      "direction": "directional",
+      "structure": "debit_spread",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Trades a confirmed intraday directional break in FINNIFTY (the NSE financial-services index) using a bull-call or bear-put debit spread on the weekly expiry, exploiting the faster weekly theta and financial-sector momentum while capping net debit.",
+      "entry": "Build the opening range from 09:15-09:45 5-minute candles; after 09:45, on a 5-minute close beyond the OR high (long) or OR low (short) with price on the matching side of VWAP and confirming financial-sector breadth (HDFC Bank, ICICI Bank, SBI aligned), long the near-ATM CE/PE and short one strike further OTM; entry window 09:45-13:00 IST.",
+      "exit": "Structure stop on a 5-minute close back inside the opening range; premium stop at the trade-loss cap; book 50% at +1R and trail the remainder to breakeven; target +2R or the spread's max value; time exit 14:45, force exit 15:20 IST; never carry into the weekly settlement.",
+      "filters": [
+        "FINNIFTY weekly expiry cycle only (single index)",
+        "India VIX between 11 and 24",
+        "opening-range width 0.25%-1.2% of spot",
+        "skip RBI-policy and major bank-result days",
+        "net debit x lot <= trade-loss cap",
+        "avoid the final 90 minutes of expiry-day terminal theta"
+      ],
+      "rationale": "FINNIFTY concentrates NSE financial heavyweights, so it trends cleanly when banking constituents align; its shorter weekly cycle sharpens gamma early in the session, and a one-strike debit spread keeps the elevated weekly theta and IV cost defined on failed breaks.",
+      "data_requirements": [
+        "5m OHLCV index",
+        "VWAP",
+        "opening-range levels",
+        "financial-sector constituent breadth",
+        "India VIX",
+        "FINNIFTY weekly option chain",
+        "expiry calendar"
+      ],
+      "tags": [
+        "finnifty",
+        "debit_spread",
+        "directional",
+        "weekly_expiry",
+        "intraday",
+        "defined_risk"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "40000",
+        "max_trades_per_day": 3,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "second_entry_pullback_debit_spread",
+      "name": "Failed-Breakout Second-Entry Debit Spread",
+      "desk": "options",
+      "family": "debit_spread",
+      "instrument": "index_option",
+      "timeframe": "intraday",
+      "direction": "directional",
+      "structure": "debit_spread",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A second-entry (2B) play on NIFTY/BANKNIFTY that ignores the first breakout, waits for it to fail and trap breakout traders, then enters a debit spread on the second push through the same level once price reclaims it with conviction.",
+      "entry": "After a first 5-minute close beyond a prior-day extreme or opening-range edge fails and closes back inside within three candles (the trap), arm the level; enter only on the second 5-minute close back through that same level in the original direction, with price on the correct side of VWAP and a higher-low (long) or lower-high (short) structure; long near-ATM CE/PE, short one strike OTM; entry window 10:00-13:15 IST.",
+      "exit": "Structure stop on a 5-minute close back below the reclaimed level (long) or above it (short); premium stop at the trade-loss cap; book 50% at +1R, trail the rest to breakeven; target +2R or spread max value; time exit 14:45, force exit 15:20 IST.",
+      "filters": [
+        "requires a documented first-attempt failure before arming",
+        "one second-entry attempt per level per session",
+        "India VIX between 10 and 22",
+        "skip event days",
+        "abort if price crosses the level >= 3 times (chop)",
+        "net debit x lot <= trade-loss cap"
+      ],
+      "rationale": "First breakouts on the NSE frequently fail and trap momentum traders; the resulting stop-run fuels the second push, so entering only on the reclaim after a failed first attempt filters low-quality breakouts and gives a tighter invalidation than the initial break.",
+      "data_requirements": [
+        "5m OHLCV index",
+        "VWAP",
+        "prev-day OHLC",
+        "opening-range levels",
+        "India VIX",
+        "option chain near-ATM",
+        "event calendar"
+      ],
+      "tags": [
+        "second_entry",
+        "pullback",
+        "failed_breakout",
+        "debit_spread",
+        "intraday",
+        "directional"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "40000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "trend_continuation_flag_debit_spread",
+      "name": "Intraday Trend-Continuation Flag Debit Spread",
+      "desk": "options",
+      "family": "debit_spread",
+      "instrument": "index_option",
+      "timeframe": "intraday",
+      "direction": "directional",
+      "structure": "debit_spread",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtested",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Adds to an already-established intraday trend in NIFTY/BANKNIFTY by buying a debit spread on the first shallow flag or pullback to a rising/falling VWAP or moving-average anchor, rather than initiating at the open.",
+      "entry": "Only after an established trend is confirmed (price trending on the correct side of a sloping VWAP with higher highs/higher lows for longs, or the mirror for shorts, for at least 45 minutes); on the first controlled pullback that holds VWAP or the prior swing and prints a rejection candle, long near-ATM CE/PE and short one strike OTM in the trend direction; entry window 10:15-13:30 IST.",
+      "exit": "Structure stop on a decisive 5-minute close through VWAP against the trend or below the flag low (long) / above the flag high (short); premium stop at the trade-loss cap; scale 50% at +1R, trail the remainder under rising VWAP or swing pivots; time exit 14:45, force exit 15:20 IST.",
+      "filters": [
+        "established trend-day classification required (skip range days)",
+        "sloping VWAP confirming trend direction",
+        "shallow pullback only (reject deep >50% retraces of the leg)",
+        "India VIX between 10 and 24",
+        "skip event days",
+        "net debit x lot <= trade-loss cap"
+      ],
+      "rationale": "On NSE trend days the index repeatedly resumes from shallow flags at VWAP as institutions add on dips; joining the second or third leg of a proven trend at a controlled pullback has a better reward-to-risk and lower whipsaw than fresh breakout entries, with the debit spread bounding cost.",
+      "data_requirements": [
+        "5m OHLCV index",
+        "VWAP + slope",
+        "intraday swing structure",
+        "trend-day label",
+        "India VIX",
+        "option chain near-ATM",
+        "event calendar"
+      ],
+      "tags": [
+        "trend_continuation",
+        "flag",
+        "pullback",
+        "vwap",
+        "debit_spread",
+        "intraday"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "40000",
+        "max_trades_per_day": 3,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "gap_and_go_continuation_debit_spread",
+      "name": "Gap-and-Go Opening Continuation (Long / Debit Spread)",
+      "desk": "options",
+      "family": "gap",
+      "instrument": "index_option",
+      "timeframe": "intraday",
+      "direction": "directional",
+      "structure": "debit_spread",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Trades continuation of a meaningful opening gap on NIFTY/BANKNIFTY when early price action holds the gap and pushes through the opening range in the gap direction, expressed as a long option or a one-strike debit spread.",
+      "entry": "On a meaningful opening gap (index gap beyond a tradable percent band and not into an obvious prior-day pivot wall), if price holds above the opening-range high on a gap-up (buy CE) or below the opening-range low on a gap-down (buy PE) after 09:45 with price on the matching side of VWAP and a higher-low (up) / lower-high (down) structure, take a long near-ATM leg or a one-strike debit spread; entry window 09:45-12:00 IST.",
+      "exit": "Structure stop on a 5-minute close back inside the opening range or a fill of half the gap against the position; premium stop at the trade-loss cap; book 50% at +1R and trail; time exit 14:30, force exit 15:20 IST.",
+      "filters": [
+        "gap magnitude within a tradable band (not a shock gap)",
+        "gap not immediately into a major prior-day pivot/wall",
+        "hold above/below opening-range edge and VWAP",
+        "India VIX between 11 and 24 (skip extreme-IV open)",
+        "skip pre-scheduled event-driven gaps",
+        "net debit x lot <= trade-loss cap"
+      ],
+      "rationale": "A gap that holds and extends through the opening range on the NSE signals genuine overnight demand or supply that often trends for the session; requiring the OR/VWAP hold filters exhaustion gaps that fade, while a defined-risk structure caps the premium bleed if the gap reverses.",
+      "data_requirements": [
+        "prev-day close",
+        "5m OHLCV index",
+        "VWAP",
+        "opening-range levels",
+        "gap %",
+        "India VIX",
+        "option chain near-ATM",
+        "event calendar"
+      ],
+      "tags": [
+        "gap",
+        "gap_and_go",
+        "continuation",
+        "momentum",
+        "debit_spread",
+        "intraday"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "40000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "gap_fade_vwap_reversion_long",
+      "name": "Opening Gap-Fade to VWAP (Long Option)",
+      "desk": "options",
+      "family": "gap",
+      "instrument": "index_option",
+      "timeframe": "intraday",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Fades an exhausted, over-extended opening gap on NIFTY/BANKNIFTY back toward VWAP or prior-day close using a long option only (buy PE to fade a gap-up, buy CE to fade a gap-down), keeping risk defined with no short premium.",
+      "entry": "On an exaggerated opening gap that stalls (a gap-up that fails to hold the OR high, or a gap-down that fails to hold the OR low) with a reversal/rejection candle against the gap and price crossing back through VWAP after 09:45, buy a long PE to fade a gap-up or a long CE to fade a gap-down toward VWAP / prior-day close; entry window 09:45-11:30 IST.",
+      "exit": "Book the bulk at the VWAP touch or prior-day-close fill; trail the remainder to the next intraday level; premium stop at the trade-loss cap if the gap resumes and reclaims the OR edge; time exit 13:30, force exit 15:20 IST.",
+      "filters": [
+        "gap must be over-extended / exhaustion, not trending gap-and-go",
+        "require a rejection candle and VWAP cross before entry",
+        "abort if the gap reclaims the OR edge (turns into continuation)",
+        "India VIX <= 22",
+        "skip pre-scheduled event-driven gaps",
+        "one fade attempt per session"
+      ],
+      "rationale": "Many NSE opening gaps over-shoot on overnight sentiment and partially fill back to VWAP as the initial imbalance is absorbed; fading only exhausted gaps with a rejection and VWAP-cross confirmation captures the reversion, and a long option keeps the trade defined-risk with no short-premium tail.",
+      "data_requirements": [
+        "prev-day close",
+        "5m OHLCV index",
+        "VWAP",
+        "opening-range levels",
+        "gap %",
+        "India VIX",
+        "option chain near-ATM",
+        "event calendar"
+      ],
+      "tags": [
+        "gap",
+        "gap_fade",
+        "mean_reversion",
+        "vwap",
+        "long",
+        "intraday"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "40000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "event_volatility_long_vega_scorecard",
+      "name": "Event / Earnings Long-Vega Scorecard",
+      "desk": "options",
+      "family": "event_volatility",
+      "instrument": "index_option",
+      "timeframe": "swing",
+      "direction": "none",
+      "structure": "single_leg",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of long-vega positioning ahead of scheduled high-impact NSE events (RBI monetary policy, Union Budget, large-cap results season, general-election outcomes) to research whether pre-event implied volatility under-prices the realised move. No orders emitted.",
+      "entry": "Study-only: log candidate long-vega entries (long ATM options as a vega proxy) one to three sessions before a scheduled event when the pre-event IV / India VIX sits below the historically realised event move, tagging the event type and days-to-event. No orders emitted.",
+      "exit": "Study-only: record hypothetical exits into the event as IV expands, or immediately after the announcement to sidestep the IV crush, comparing realised move against the premium paid. No positions managed.",
+      "filters": [
+        "scheduled high-impact event within the study horizon",
+        "pre-event IV percentile below its event-history norm",
+        "adequate time to expiry to limit theta bleed before the event",
+        "block when IV is already richly bid pre-event",
+        "flag known IV-crush profile of each event type"
+      ],
+      "rationale": "Around RBI policy, the Budget, marquee results, and election counts the NSE routinely realises outsized index moves, yet pre-event IV is sometimes under-bid; framing this as a scorecard lets the platform research the long-vega edge and the timing of the post-event IV crush before any execution consideration.",
+      "data_requirements": [
+        "option chain ATM",
+        "option IV surface",
+        "India VIX",
+        "realised vol",
+        "event calendar",
+        "expiry calendar"
+      ],
+      "tags": [
+        "event",
+        "earnings",
+        "long_vega",
+        "volatility",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "long_butterfly_scorecard",
+      "name": "Long Butterfly Scorecard",
+      "desk": "options",
+      "family": "butterfly",
+      "instrument": "index_option",
+      "timeframe": "positional",
+      "direction": "none",
+      "structure": "butterfly",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of long ATM butterflies (buy one lower strike, sell two body strikes, buy one upper strike) that target a pin near a central strike into expiry. Multi-leg structure with short body strikes: never executable per the safety rails.",
+      "entry": "Study-only: log candidate long butterflies centred on an expected expiry pin (e.g. a max-OI or max-pain strike) when the net debit is small relative to the maximum payoff and the index is expected to settle near the body. No orders emitted.",
+      "exit": "Study-only: record hypothetical exits as the index converges on the body near expiry (approaching max payoff) or as time decay erodes the wings, and note management if the index drifts to a wing. No positions managed.",
+      "filters": [
+        "range-bound / low-expected-move expiry expectation",
+        "narrow net debit vs payoff",
+        "block on trend/expansion regime",
+        "requires assignment/pin-risk modelling before any consideration"
+      ],
+      "rationale": "Long butterflies are a low-cost, defined-risk way to bet on a pin near a central strike into expiry, but the two short body legs and pin-risk behaviour make them a multi-leg structure kept scorecard-only under the platform's executable-structure rails.",
+      "data_requirements": [
+        "option chain multiple strikes",
+        "open-interest by strike",
+        "max-pain estimate",
+        "India VIX",
+        "expiry calendar"
+      ],
+      "tags": [
+        "butterfly",
+        "pin_risk",
+        "theta",
+        "defined_risk",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "calendar_spread_scorecard",
+      "name": "Calendar Spread Scorecard",
+      "desk": "options",
+      "family": "calendar",
+      "instrument": "index_option",
+      "timeframe": "positional",
+      "direction": "none",
+      "structure": "calendar",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of horizontal calendar spreads (sell a near-dated option, buy a further-dated option at the same strike) that harvest the faster near-leg theta and term-structure differences on NSE index options. Contains a short near-dated leg: never executable per the safety rails.",
+      "entry": "Study-only: log candidate ATM calendars selling the near weekly and buying the next weekly/monthly at the same strike when the near-term IV is elevated relative to the far term (steep term structure) and the index is expected to stay near the strike. No orders emitted.",
+      "exit": "Study-only: record hypothetical exits at near-leg expiry, on a term-structure normalisation, or on a large directional move away from the strike that hurts the calendar. No positions managed.",
+      "filters": [
+        "near-term IV elevated vs far term (favourable term structure)",
+        "index expected to remain near the chosen strike",
+        "block on strong directional / expansion regime",
+        "requires margin, roll, and pin-risk modelling before any consideration"
+      ],
+      "rationale": "Calendars monetise the faster decay of the near-dated leg and shifts in the NSE weekly-versus-monthly IV term structure, but they carry a short near-dated leg and path-dependent risk near the front expiry, so they remain scorecard-only under the executable-structure rails.",
+      "data_requirements": [
+        "option chain multiple expiries",
+        "IV term structure",
+        "India VIX",
+        "expiry calendar",
+        "open-interest by strike"
+      ],
+      "tags": [
+        "calendar",
+        "term_structure",
+        "theta",
+        "vega",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "protective_put_scorecard",
+      "name": "Protective Put Scorecard",
+      "desk": "options",
+      "family": "protective",
+      "instrument": "index_option",
+      "timeframe": "positional",
+      "direction": "none",
+      "structure": "protective_put",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of a protective put overlay (a long OTM index put hedging a notional long-index or index-ETF exposure) to research the cost and drawdown-reduction of downside insurance on the NSE. Hedge-overlay structure outside the executable set: never executable here.",
+      "entry": "Study-only: log candidate protective puts (buy an OTM index put sized to a hypothetical long-index notional) when the study wants to cap tail risk into an uncertain macro/event window, tagging strike distance, premium as a percent of notional, and days to expiry. No orders emitted.",
+      "exit": "Study-only: record hypothetical roll or expiry of the put, and the net drag-versus-protection outcome across the holding window. No positions managed.",
+      "filters": [
+        "requires a modelled underlying long-index notional to hedge",
+        "OTM put strike and cost band defined as a percent of notional",
+        "prefer study windows of elevated event/tail risk",
+        "hedge-overlay structure kept scorecard-only per rails"
+      ],
+      "rationale": "A protective put converts an open-ended equity drawdown into a known insurance cost, which is valuable through Indian macro and event shocks; it is retained scorecard-only because it is a hedge overlay on an assumed underlying position rather than a standalone long/debit index-option trade in the executable set.",
+      "data_requirements": [
+        "underlying long-index notional (assumed)",
+        "option chain OTM puts",
+        "India VIX",
+        "premium-as-percent-of-notional",
+        "expiry calendar"
+      ],
+      "tags": [
+        "protective_put",
+        "hedge",
+        "downside_protection",
+        "insurance",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "collar_scorecard",
+      "name": "Collar Scorecard",
+      "desk": "options",
+      "family": "protective",
+      "instrument": "index_option",
+      "timeframe": "positional",
+      "direction": "none",
+      "structure": "collar",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of a collar (long OTM put financed by a short OTM call) around a notional long-index or index-ETF exposure, researching low-cost or zero-cost downside protection at the price of a capped upside. Contains a short call leg and is a hedge overlay: never executable here.",
+      "entry": "Study-only: log candidate collars buying an OTM protective put and selling an OTM call against a hypothetical long-index notional so the call premium offsets much of the put cost, tagging the protected floor, the capped ceiling, and net cost. No orders emitted.",
+      "exit": "Study-only: record hypothetical unwinding or rolling of both legs at expiry or when the view changes, and the realised protection-versus-capped-upside outcome. No positions managed.",
+      "filters": [
+        "requires a modelled underlying long-index notional to collar",
+        "put floor and call ceiling strikes defined as percents of notional",
+        "target near-zero net cost where feasible",
+        "contains a short option leg and hedge overlay: scorecard-only per rails"
+      ],
+      "rationale": "A collar cheapens downside insurance by giving up upside beyond the short call, a common institutional hedge into uncertain NSE windows; it stays scorecard-only because it both writes a call (short premium) and overlays an assumed underlying position, placing it outside the long/debit executable set.",
+      "data_requirements": [
+        "underlying long-index notional (assumed)",
+        "option chain OTM puts and calls",
+        "India VIX",
+        "net-cost estimate",
+        "expiry calendar"
+      ],
+      "tags": [
+        "collar",
+        "hedge",
+        "short_premium",
+        "capped_upside",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "credit_spread_directional_scorecard",
+      "name": "Bear-Call / Bull-Put Credit Spread Scorecard",
+      "desk": "options",
+      "family": "credit_spread",
+      "instrument": "index_option",
+      "timeframe": "positional",
+      "direction": "none",
+      "structure": "credit_spread",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of directional vertical credit spreads on NSE index options: a bear-call spread (sell a nearer OTM call, buy a further OTM call) for a bearish view, or a bull-put spread (sell a nearer OTM put, buy a further OTM put) for a bullish view. Net short premium: never executable per the safety rails.",
+      "entry": "Study-only: log candidate credit spreads selling a nearer-OTM option beyond an expected support/resistance level and buying a further-OTM option as the defined-risk wing, collecting a net credit sized to a target directional/theta thesis. No orders emitted.",
+      "exit": "Study-only: record hypothetical management on the short strike being tested, a credit-decay profit target (e.g. buy back at a fraction of the credit), or a break of the level against the spread. No positions managed.",
+      "filters": [
+        "directional-with-theta thesis (range-to-trend fade of a level)",
+        "defined wing width sized to the rupee risk model",
+        "block when the level breaks with strong breadth",
+        "block when India VIX is expanding into the position",
+        "net short premium: requires margin and assignment modelling; scorecard-only per rails"
+      ],
+      "rationale": "Credit spreads express a directional view while collecting theta with a capped per-side loss from the long wing, but they are net short premium and carry gap and assignment risk near expiry; per the safety rails any net-short-premium structure is retained scorecard-only and can never be executable.",
+      "data_requirements": [
+        "option chain both sides",
+        "open-interest by strike",
+        "support/resistance levels",
+        "India VIX",
+        "expiry calendar"
+      ],
+      "tags": [
+        "credit_spread",
+        "bear_call",
+        "bull_put",
+        "short_premium",
+        "theta",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "max_pain_oi_positioning_scorecard",
+      "name": "Max-Pain / OI Positioning Scorecard",
+      "desk": "options",
+      "family": "positioning",
+      "instrument": "index_option",
+      "timeframe": "positional",
+      "direction": "none",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Scorecard-only study of NSE index-option positioning: max-pain strike, open-interest walls, OI shifts, and the put-call ratio, to research where price may gravitate into expiry and how positioning skews the risk backdrop. A positioning study only; emits no directional signal and no orders.",
+      "entry": "Study-only: log the evolving max-pain strike, the highest call-OI and put-OI walls (support/resistance clusters), day-over-day OI build-up/unwind, and the PCR trend across the expiry, annotating how the picture shifts as expiry approaches. No orders emitted.",
+      "exit": "Study-only: record how price resolves relative to max-pain and the OI walls at settlement, and whether PCR extremes preceded reversions. No positions managed.",
+      "filters": [
+        "adequate open-interest depth for a meaningful read",
+        "interpret alongside price/trend context, not in isolation",
+        "note distortion around events, rollovers, and expiry",
+        "positioning study only: no executable signal derived"
+      ],
+      "rationale": "Concentrated option open interest and the max-pain strike can act as intraday-to-expiry magnets and mark where hedging flow clusters on the NSE; studying max-pain, OI walls, and the PCR as a positioning scorecard adds context for other desks without itself taking a directional position.",
+      "data_requirements": [
+        "option chain full",
+        "open-interest by strike",
+        "OI change series",
+        "put-call ratio",
+        "max-pain estimate",
+        "expiry calendar"
+      ],
+      "tags": [
+        "max_pain",
+        "open_interest",
+        "pcr",
+        "positioning",
+        "expiry",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "orb_initiation_equity",
+      "name": "Equity ORB Initiation",
+      "desk": "equities",
+      "family": "orb",
+      "instrument": "equity",
+      "timeframe": "intraday",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Buys the initial breakout candle of a liquid NSE stock as it clears its opening range high, entering on the initiation rather than waiting for a retest, to capture the first thrust of a developing trend day.",
+      "entry": "Build the 09:15-09:45 opening range from 5-minute candles; enter long on the first 5-minute close above the OR high with expanding volume (>= 1.5x the six-candle average) while the stock is above VWAP and its confirming index (BankNifty for banks, Nifty otherwise) is also above its own VWAP and OR high; entry window 09:45-11:30 only, since initiation edges decay after the first two hours.",
+      "exit": "Initial stop below the OR high (now support) or the breakout candle low, whichever is tighter; book 40% at +1R, move stop to breakeven, and trail the remainder under rising VWAP or 5-minute swing lows; time exit 14:45, force exit 15:20 IST; abort a fresh entry if price whipsaws back inside the OR within two candles.",
+      "filters": [
+        "F&O-liquid or Nifty/BankNifty constituent only",
+        "stock and confirming index both above VWAP",
+        "skip earnings/result days",
+        "avoid names within 2% of an upper circuit",
+        "India VIX between 10 and 24",
+        "OR width 0.3%-1.5% of price"
+      ],
+      "rationale": "The first 30 minutes establish the day's balance on the NSE; a decisive volume-backed break of that range with index confirmation frequently initiates a trend day, and taking the initiation captures the fastest part of the move before the retest crowd arrives.",
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "opening-range levels",
+        "VWAP",
+        "volume profile",
+        "confirming index",
+        "India VIX",
+        "earnings calendar"
+      ],
+      "tags": [
+        "orb",
+        "initiation",
+        "breakout",
+        "equity",
+        "intraday",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 3,
+        "max_open_positions": 2
+      }
+    },
+    {
+      "id": "opening_drive_momentum_equity",
+      "name": "Equity Opening-Drive Momentum",
+      "desk": "equities",
+      "family": "opening_drive",
+      "instrument": "equity",
+      "timeframe": "intraday",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Rides a strong one-directional open in a liquid NSE stock that trades away from the opening print with conviction, entering on the first shallow pullback rather than fighting the drive.",
+      "entry": "Identify an opening drive by 09:35: the stock opens and pushes up at least 0.75% off the open with every 5-minute candle holding above VWAP and no lower low; enter long on the first pullback that holds VWAP or the prior 5-minute low, provided the confirming index is also drifting up on its VWAP side; preferred window 09:30-10:30.",
+      "exit": "Stop below the pullback low or a decisive 5-minute close under VWAP; scale 50% at +1.5R, trail the balance under successive 5-minute higher-lows or a short EMA; hard time exit 14:45, force exit 15:20 IST; do not re-enter after two failed pullbacks.",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "no overnight gap larger than 3% (avoids exhaustion opens)",
+        "stock holding above VWAP since the open",
+        "skip earnings/result days",
+        "avoid circuit-bound names",
+        "confirming index on the same VWAP side"
+      ],
+      "rationale": "A conviction-led open where price never revisits the opening print reflects genuine institutional demand that tends to persist through the morning on the NSE; entering on shallow pullbacks gives trend-following exposure with a defined invalidation at VWAP.",
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "VWAP",
+        "opening print / gap data",
+        "confirming index",
+        "India VIX",
+        "earnings calendar"
+      ],
+      "tags": [
+        "opening_drive",
+        "momentum",
+        "trend",
+        "equity",
+        "intraday",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 2
+      }
+    },
+    {
+      "id": "swing_range_breakout_equity",
+      "name": "Equity Swing Range Breakout",
+      "desk": "equities",
+      "family": "breakout",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Buys a liquid NSE stock as it breaks out of a multi-week consolidation base on expanding volume, aiming to capture the early leg of a new swing trend.",
+      "entry": "Identify a horizontal base of at least 15-20 sessions with contracting range; enter long on a daily close above the base resistance accompanied by volume >= 1.5x the 20-day average, provided the stock is above its rising 50-DMA and the Nifty regime is not in a sharp downtrend; swing hold of days to a few weeks. Prefer entry on the breakout close or a shallow next-day pullback that holds the broken level.",
+      "exit": "Initial stop a few percent below the breakout level or below the base low, sized to the per-trade rupee cap; book partial into the first measured-move target (base height projected upward), trail the remainder under the rising 20-DMA or successive weekly higher-lows; exit on a decisive daily close back inside the base (failed breakout).",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "base >= 15 sessions with range contraction",
+        "breakout volume >= 1.5x 20-day average",
+        "price above rising 50-DMA",
+        "avoid names with imminent earnings",
+        "Nifty regime not in sharp downtrend"
+      ],
+      "rationale": "Multi-week bases represent accumulation where supply is absorbed; a volume-backed break signals a supply/demand imbalance that often trends on the NSE, and the base low offers a structurally clean, cost-efficient invalidation for a swing hold.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "20-day / 50-DMA",
+        "volume averages",
+        "base/consolidation levels",
+        "Nifty regime",
+        "earnings calendar"
+      ],
+      "tags": [
+        "breakout",
+        "base",
+        "consolidation",
+        "swing",
+        "equity",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 3
+      }
+    },
+    {
+      "id": "darvas_box_52w_high_equity",
+      "name": "Darvas Box / 52-Week-High Breakout",
+      "desk": "equities",
+      "family": "darvas",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Applies a Darvas-box framework to liquid NSE leaders, buying a breakout above the current box that also clears or sits near a 52-week high, following stocks already in demonstrated leadership.",
+      "entry": "Construct the current Darvas box from the recent swing high (ceiling) and the subsequent consolidation floor; enter long on a daily close above the box ceiling on above-average volume, requiring the stock to be making a new 52-week high or within a few percent of it and above its rising 50-DMA; swing hold. Only take names showing positive relative strength versus Nifty.",
+      "exit": "Stop just below the box floor of the most recent valid box; as price forms higher boxes, raise the stop under each new floor (box-trailing); book a partial after the first clear box-to-box advance; exit on a decisive close back below the current box floor.",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "at or near a 52-week high",
+        "positive relative strength vs Nifty",
+        "breakout volume above 20-day average",
+        "avoid names with imminent earnings",
+        "avoid extended parabolic prints far above the box"
+      ],
+      "rationale": "Stocks at 52-week highs face no overhead supply and are, by definition, in leadership; the Darvas box provides an objective, rules-based trailing stop that has historically kept traders in strong NSE trends while defining risk at each stage.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "52-week high/low",
+        "Darvas box levels",
+        "50-DMA",
+        "relative-strength vs Nifty",
+        "volume averages",
+        "earnings calendar"
+      ],
+      "tags": [
+        "darvas",
+        "52_week_high",
+        "breakout",
+        "leadership",
+        "swing",
+        "equity",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 3
+      }
+    },
+    {
+      "id": "swing_pullback_rising_ma_equity",
+      "name": "Equity Swing Pullback to Rising MA",
+      "desk": "equities",
+      "family": "pullback",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Buys a trend-continuation pullback in an uptrending NSE stock as price retraces to a rising moving average and resumes, joining an established trend at lower risk than chasing new highs.",
+      "entry": "In a stock in a confirmed uptrend (price above a rising 20-DMA and 50-DMA, with 20 above 50), wait for an orderly pullback into the rising 20-DMA (or a defined support confluence); enter long on a daily reversal signal off the average - a bullish close reclaiming the prior day's high or an intraday higher-low - with the Nifty regime supportive; swing hold.",
+      "exit": "Stop below the pullback swing low or a decisive close under the 50-DMA, whichever preserves the per-trade rupee cap; book a partial at the prior swing high, trail the remainder under the rising 20-DMA; exit if the uptrend structure breaks (lower high and lower low) or the 20/50 stack inverts.",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "price above rising 20-DMA and 50-DMA (20 > 50)",
+        "orderly (non-vertical) pullback into the average",
+        "avoid names with imminent earnings",
+        "Nifty regime supportive / not sharp downtrend",
+        "adequate liquidity to control slippage"
+      ],
+      "rationale": "Rising moving averages act as dynamic support in trending NSE stocks as trend-followers add on dips; buying the resumption off the average captures continuation with a tight, structurally defined stop and favourable reward relative to chasing extended prints.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "20-DMA",
+        "50-DMA",
+        "swing structure levels",
+        "Nifty regime",
+        "earnings calendar"
+      ],
+      "tags": [
+        "pullback",
+        "trend_continuation",
+        "moving_average",
+        "swing",
+        "equity",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 3
+      }
+    },
+    {
+      "id": "rsi2_uptrend_reversion_equity",
+      "name": "RSI-2 Uptrend Mean Reversion",
+      "desk": "equities",
+      "family": "mean_reversion",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A short-term RSI-2 style mean-reversion long that buys deep oversold dips only within a confirmed uptrend, holding for a quick snap-back rather than a multi-week trend.",
+      "entry": "Require a longer-term uptrend filter (price above the rising 200-DMA and preferably above the 50-DMA); when the 2-period RSI drops into deep oversold (e.g. below 10) on a pullback, buy on that day's close or the next open; short intended hold of one to a few days. Only in liquid names with the Nifty regime not in a sharp downtrend.",
+      "exit": "Exit on RSI-2 recovering above a mid threshold (e.g. > 60-70) or price closing above a short moving average (e.g. 5-DMA); hard stop on a decisive close below the 200-DMA or a fixed percentage adverse move; strict time stop of a few sessions to avoid turning a failed reversion into a trend-fighting hold.",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "price above rising 200-DMA (long-term uptrend)",
+        "RSI-2 deeply oversold on a pullback (not a breakdown)",
+        "avoid names with imminent earnings",
+        "Nifty regime not in sharp downtrend",
+        "hard time stop of a few sessions"
+      ],
+      "rationale": "Short-period RSI extremes inside an established uptrend mark transient oversold conditions that statistically snap back on the NSE; anchoring to a long-term uptrend keeps the strategy long-only and avoids catching falling knives, while the time stop caps cost drag from stale positions.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "RSI-2",
+        "50-DMA",
+        "200-DMA",
+        "5-DMA",
+        "Nifty regime",
+        "earnings calendar"
+      ],
+      "tags": [
+        "mean_reversion",
+        "rsi2",
+        "oversold",
+        "uptrend",
+        "swing",
+        "equity",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 3
+      }
+    },
+    {
+      "id": "relative_strength_leader_equity",
+      "name": "Relative-Strength Leader vs NIFTY",
+      "desk": "equities",
+      "family": "relative_strength",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Buys NSE stocks demonstrating persistent relative-strength leadership over the NIFTY, entering on a continuation trigger to ride outperformers while the index leadership holds.",
+      "entry": "Rank a liquid universe by relative strength versus Nifty over multiple lookbacks (e.g. 1/3/6 months) plus a rising RS-line making new highs; from the top RS cohort, enter long a stock on a swing continuation trigger - a breakout to a new high or a pullback that holds a rising moving average - while the stock is above its 50-DMA and the Nifty is not in a sharp downtrend; swing hold.",
+      "exit": "Exit when the RS-line rolls over and the stock drops out of the leadership cohort, on a close below the trailing 50-DMA, or on a structural lower-high/lower-low break; hard stop below the entry swing low sized to the per-trade rupee cap; rotate proceeds to the next-strongest leader.",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "top relative-strength cohort vs Nifty",
+        "rising RS-line at new highs",
+        "price above rising 50-DMA",
+        "avoid names with imminent earnings",
+        "Nifty regime not in sharp downtrend"
+      ],
+      "rationale": "Relative strength persists: NSE stocks that lead the index tend to keep leading over intermediate horizons as flows concentrate into winners; buying confirmed leaders on continuation triggers harnesses that momentum while the RS-line and 50-DMA define objective exits.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "Nifty index",
+        "relative-strength ranks",
+        "RS-line",
+        "50-DMA",
+        "earnings calendar"
+      ],
+      "tags": [
+        "relative_strength",
+        "leadership",
+        "momentum",
+        "swing",
+        "equity",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 2,
+        "max_open_positions": 3
+      }
+    },
+    {
+      "id": "gap_fill_reclaim_equity",
+      "name": "Gap-Fill Reclaim (Long)",
+      "desk": "equities",
+      "family": "gap",
+      "instrument": "equity",
+      "timeframe": "intraday",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Trades a long-only reclaim of a modest gap-down toward the prior close in a fundamentally uptrending NSE stock, betting that an unnews-driven morning gap fills back to yesterday's close.",
+      "entry": "For a liquid stock in an intact uptrend that gaps down modestly (roughly 0.75%-3%) with no adverse overnight news, wait for a stabilising base in the first 20-30 minutes and enter long only when price reclaims the opening 15-minute high and pushes back through VWAP toward the prior close; entry window 09:30-11:30; target is the prior close / gap fill.",
+      "exit": "Stop below the intraday low of the stabilising base or a decisive loss of VWAP; primary target the prior close (gap fill), booking the bulk there and trailing any runner above VWAP; time exit 14:45, force exit 15:20 IST; abort if the stock makes fresh lows instead of reclaiming (do not average a widening gap).",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "gap-down of ~0.75%-3% with no adverse news",
+        "stock in an intact daily uptrend",
+        "reclaim of VWAP required before entry",
+        "skip earnings/result-driven gaps",
+        "avoid circuit-bound names"
+      ],
+      "rationale": "Modest, news-free gaps in uptrending NSE stocks frequently reflect overnight sentiment or index drag rather than fundamentals, and buyers step in to fill the gap toward the anchored prior close; requiring a VWAP reclaim avoids catching genuine breakdowns and keeps the play long-only.",
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "prev-day close/OHLC",
+        "VWAP",
+        "opening-range levels",
+        "news/earnings calendar",
+        "daily trend context"
+      ],
+      "tags": [
+        "gap",
+        "gap_fill",
+        "reclaim",
+        "reversion",
+        "equity",
+        "intraday",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 3,
+        "max_open_positions": 2
+      }
+    },
+    {
+      "id": "high_rvol_momentum_continuation_equity",
+      "name": "High Relative-Volume Momentum Continuation",
+      "desk": "equities",
+      "family": "momentum",
+      "instrument": "equity",
+      "timeframe": "intraday",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "Trades continuation in a liquid NSE stock exhibiting an abnormal surge in relative volume alongside a directional move, buying orderly pullbacks in the direction of the volume-confirmed trend.",
+      "entry": "Screen intraday for stocks trading at high relative volume (e.g. cumulative volume >= 2x the typical curve for the time of day) while trending up and holding above VWAP; enter long on the first orderly pullback that holds VWAP or a rising short EMA, with the confirming index not fighting the direction; preferred window 09:45-13:30.",
+      "exit": "Stop below the pullback low or a decisive 5-minute close under VWAP; scale 50% at +1R, move to breakeven, trail the balance under 5-minute higher-lows or the short EMA; stand aside if relative volume collapses back toward normal (edge fading); time exit 14:45, force exit 15:20 IST.",
+      "filters": [
+        "F&O-liquid or index constituent only",
+        "relative volume >= 2x time-of-day baseline",
+        "stock above VWAP in the trade direction",
+        "skip earnings/result days",
+        "avoid circuit-bound names",
+        "India VIX between 10 and 26"
+      ],
+      "rationale": "A genuine relative-volume surge signals fresh institutional participation and information flow that tends to extend intraday on the NSE; entering on pullbacks within the volume-confirmed trend captures continuation while VWAP provides a clean, cost-aware invalidation.",
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "relative-volume / time-of-day volume curve",
+        "VWAP",
+        "short EMA",
+        "confirming index",
+        "India VIX",
+        "earnings calendar"
+      ],
+      "tags": [
+        "momentum",
+        "relative_volume",
+        "continuation",
+        "equity",
+        "intraday",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 3,
+        "max_open_positions": 2
+      }
+    },
+    {
+      "id": "vwap_band_reversion_intraday_equity",
+      "name": "Index-Constituent VWAP-Band Reversion (Long)",
+      "desk": "equities",
+      "family": "mean_reversion",
+      "instrument": "equity",
+      "timeframe": "intraday",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtest_ready",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A long-only intraday reversion that buys a liquid index-constituent when it stretches to a lower VWAP standard-deviation band on a range/balanced day and rejects, targeting reversion back to VWAP.",
+      "entry": "On a balanced (non-trend) day for a liquid index constituent, when price extends down to the lower VWAP band (e.g. -2 standard deviations) and prints a rejection - a bullish reversal candle or a failure to make a new low - enter long, provided the broader index is also range-bound and not breaking down; entry window 09:45-14:00; skip if the stock is in a clean one-way trend.",
+      "exit": "Primary target the VWAP mid-line, booking the bulk there; stop a defined distance below the tagged lower band or the rejection low, sized to the per-trade rupee cap; do not fight a stock that closes and holds below the lower band (regime is trending, not ranging); time exit 14:45, force exit 15:20 IST.",
+      "filters": [
+        "F&O-liquid index constituent only",
+        "balanced / range regime (not a trend day)",
+        "rejection confirmation at the lower VWAP band",
+        "index not breaking down",
+        "skip earnings/result days",
+        "avoid circuit-bound names"
+      ],
+      "rationale": "On balanced NSE sessions, index constituents oscillate around VWAP as market-makers and mean-reversion flows dominate; buying a confirmed rejection at a stretched lower band offers a favourable reward-to-risk back to VWAP, while the regime filter keeps the strategy out of trend days where reversion fails.",
+      "data_requirements": [
+        "1m/5m OHLCV equity",
+        "VWAP",
+        "VWAP standard-deviation bands",
+        "intraday regime classifier",
+        "index context",
+        "earnings calendar"
+      ],
+      "tags": [
+        "mean_reversion",
+        "vwap",
+        "bands",
+        "intraday",
+        "equity",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "1500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 3,
+        "max_open_positions": 2
+      }
+    },
+    {
+      "id": "post_earnings_drift_scorecard_equity",
+      "name": "Post-Earnings-Drift Scorecard",
+      "desk": "equities",
+      "family": "earnings",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "none",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A research-only event study that measures earnings-reaction and post-earnings-announcement drift across NSE names, scoring the persistence of moves following results without emitting any trades.",
+      "entry": "Study-only: on each results event, records the earnings-gap magnitude and direction, the surprise proxy, and the subsequent multi-day/multi-week drift, bucketing outcomes by surprise size, sector, and market-cap to score whether drift persists. No orders emitted.",
+      "exit": "Study-only: tracks realised drift windows (e.g. 1, 5, 20 sessions) for statistical characterisation only. No positions managed.",
+      "filters": [
+        "align events to the earnings calendar",
+        "exclude illiquid / circuit-bound names from the study",
+        "control for concurrent index moves",
+        "segment by surprise magnitude, sector, and market-cap",
+        "flag confounding corporate actions"
+      ],
+      "rationale": "Post-earnings-announcement drift is a widely documented anomaly; measuring its strength and decay on the NSE (where it may differ by liquidity and analyst coverage) informs whether a future executable long-only variant is worth building.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "earnings calendar",
+        "earnings surprise / estimate proxy",
+        "sector index",
+        "Nifty index",
+        "corporate-action calendar"
+      ],
+      "tags": [
+        "earnings",
+        "post_earnings_drift",
+        "event_study",
+        "scorecard",
+        "non_executable",
+        "research"
+      ],
+      "risk": null
+    },
+    {
+      "id": "advance_decline_thrust_scorecard_equity",
+      "name": "Advance-Decline / Breadth-Thrust Regime Scorecard",
+      "desk": "equities",
+      "family": "market_breadth",
+      "instrument": "equity",
+      "timeframe": "swing",
+      "direction": "none",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A research-only breadth scorecard that tracks the NSE advance-decline line and breadth-thrust conditions to characterise market regime for gating and sizing long-side strategies, without trading itself.",
+      "entry": "Study-only: computes the cumulative advance-decline line, the advancers-to-decliners ratio, new-highs-minus-new-lows, and breadth-thrust triggers (e.g. a sharp surge in the proportion of advancing constituents), emitting a regime score that downstream strategies may consult. No orders emitted.",
+      "exit": "Study-only: maintains a rolling regime state (expanding vs deteriorating breadth) for characterisation and gating research only. No positions managed.",
+      "filters": [
+        "use a consistent constituent universe for A/D counts",
+        "breadth-thrust threshold on advancing proportion",
+        "new-highs vs new-lows differential",
+        "sector participation breadth",
+        "flag divergences between index price and breadth"
+      ],
+      "rationale": "Breadth thrusts and a rising advance-decline line have historically preceded durable up-legs, while breadth divergences warn of narrow, fragile rallies; quantifying NSE breadth regimes provides a reusable gate to improve the hit rate and sizing of long-side strategies.",
+      "data_requirements": [
+        "advance/decline line",
+        "advancers/decliners counts",
+        "new-highs / new-lows",
+        "sector index breadth",
+        "Nifty index",
+        "constituent universe"
+      ],
+      "tags": [
+        "breadth",
+        "advance_decline",
+        "breadth_thrust",
+        "regime",
+        "scorecard",
+        "non_executable",
+        "research"
+      ],
+      "risk": null
+    },
+    {
+      "id": "dma_momentum_20_50",
+      "name": "20/50 DMA Momentum Crossover",
+      "desk": "investment",
+      "family": "dma_momentum",
+      "instrument": "equity",
+      "timeframe": "positional",
+      "direction": "long",
+      "structure": "single_leg",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtested",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A faster long-only trend-following rule than the 50/200 cross: holds a liquid quality name while its 20-DMA is above its 50-DMA and stands aside when the shorter average rolls under the longer one.",
+      "entry": "Go long (paper) when the 20-DMA crosses above the 50-DMA and the daily close is above both averages; confirm the 20-DMA slope is turning up so the cross reflects genuine short-term momentum rather than a flat drift. Position on a positional (multi-week) horizon and size within the per-position rupee cap.",
+      "exit": "Exit to cash when the 20-DMA crosses back below the 50-DMA, or when the daily close breaks decisively below the 50-DMA before the cross completes. Re-enter only on a fresh upward cross, accepting that this faster signal whipsaws more than the 50/200 pair.",
+      "filters": [
+        "liquid large/mid-cap or index constituent",
+        "confirm 20-DMA slope turning up (reduce flat-chop whipsaw)",
+        "avoid names with structural governance red flags",
+        "turnover-aware: skip re-entry inside a narrow re-cross band",
+        "long-only, unlevered, size within per-position rupee risk"
+      ],
+      "rationale": "The 20/50 pair reacts to Indian equity trend changes roughly a quarter earlier than the 50/200 cross, capturing more of a leg while still filtering out day-to-day noise; the trade-off is higher turnover, which the cost-aware filters and low trade cap are designed to contain.",
+      "data_requirements": [
+        "daily OHLCV equity",
+        "20-DMA",
+        "50-DMA",
+        "20-DMA slope"
+      ],
+      "tags": [
+        "dma",
+        "trend_following",
+        "momentum_crossover",
+        "positional",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "2500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 1,
+        "max_open_positions": 5
+      }
+    },
+    {
+      "id": "dual_momentum_etf_rotation",
+      "name": "Dual Momentum Single-ETF Rotation",
+      "desk": "investment",
+      "family": "dual_momentum",
+      "instrument": "etf",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "none",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtested",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A single-holding rotation that combines absolute and relative momentum: it holds the stronger of a small set of broad-market ETF proxies only when that leader also has positive absolute momentum, otherwise it sits in a cash/liquid-ETF proxy.",
+      "entry": "At each monthly review, rank a handful of liquid broad-market ETF proxies (e.g. large-cap index versus a diversified alternative) by their trailing 12-month total return (relative momentum). Buy (paper) the top-ranked ETF only if its own 12-month return also exceeds the risk-free / liquid-ETF proxy return (absolute momentum). Hold a single ETF at a time on a long-term cadence.",
+      "exit": "At the next monthly review, rotate into the new leader if leadership changes, or move entirely to the cash/liquid-ETF proxy whenever the current holding's 12-month absolute momentum turns negative. Between reviews the position is held unchanged to keep turnover low.",
+      "filters": [
+        "broad-market, high-liquidity ETF candidates only",
+        "monthly (not daily) rebalance to contain turnover and cost drag",
+        "low expense ratio / tight tracking on each candidate",
+        "cash/liquid-ETF proxy as the defensive out-of-market leg",
+        "long-only, unlevered, single holding at a time"
+      ],
+      "rationale": "Dual momentum stacks two robust effects documented across markets: relative momentum concentrates in the leading asset while absolute momentum steps aside during broad declines. For Indian long-term investors it offers a rules-based way to participate in trends yet defend capital in prolonged bear phases, at low, monthly-cadence turnover.",
+      "data_requirements": [
+        "daily OHLCV ETFs",
+        "12-month total-return momentum",
+        "risk-free / liquid-ETF proxy return",
+        "monthly rebalance schedule"
+      ],
+      "tags": [
+        "dual_momentum",
+        "absolute_momentum",
+        "relative_momentum",
+        "etf",
+        "rotation",
+        "long_term",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "2500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 1,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "absolute_momentum_index_timing",
+      "name": "Absolute-Momentum Index-ETF Timing",
+      "desk": "investment",
+      "family": "absolute_momentum",
+      "instrument": "etf",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "none",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtested",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A single-ETF time-series momentum rule that holds a broad-market index ETF only while its 12-month total return is positive and steps entirely to cash otherwise, aiming to sidestep sustained bear markets.",
+      "entry": "At each month-end review, go long (paper) the broad-market index ETF when its trailing 12-month total return is positive (price above its level twelve months ago). Take the full intended allocation in one ETF and hold through the month.",
+      "exit": "Move to cash (or a liquid-ETF cash proxy) at the month-end review whenever the trailing 12-month return turns non-positive; re-enter only when 12-month momentum flips positive again, keeping trades to at most one direction change per review.",
+      "filters": [
+        "single broad-market, liquid index ETF",
+        "month-end evaluation only (avoid intramonth churn)",
+        "low expense ratio / tight tracking",
+        "cash proxy for the out-of-market state",
+        "long-only, unlevered"
+      ],
+      "rationale": "Time-series (absolute) momentum on a broad index is one of the most robust and least parameter-sensitive defensive rules known; the 12-month lookback historically keeps Indian investors invested through expansions and in cash through the worst of drawdowns, at very low turnover and fully transparent.",
+      "data_requirements": [
+        "daily/monthly OHLCV index ETF",
+        "12-month total-return momentum",
+        "month-end evaluation schedule"
+      ],
+      "tags": [
+        "absolute_momentum",
+        "time_series_momentum",
+        "index",
+        "regime_timing",
+        "long_term",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "2500",
+        "max_daily_loss": "5000",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 1,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "sip_step_up_value_averaging",
+      "name": "SIP Step-Up / Value-Averaging DCA",
+      "desk": "investment",
+      "family": "sip_baseline",
+      "instrument": "etf",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "none",
+      "executable": true,
+      "option_selling": false,
+      "lifecycle_status": "backtested",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "An executable accumulation baseline that improves on a flat SIP by stepping the contribution up over time and value-averaging it: contributions rise when the holding lags its target growth path and ease when it runs ahead, so more units are bought into weakness.",
+      "entry": "Contribute into a broad-market index ETF on a fixed schedule (e.g. monthly). Each period apply a step-up (raise the base contribution by a small fixed percentage annually) and a value-averaging adjustment: compute the target portfolio value on a smooth growth path and invest the amount needed to reach it, so the rupee contribution increases when price has fallen and decreases when price has surged. Cap any single top-up at the base contribution multiplied by a modest bound.",
+      "exit": "No tactical exit; this is an accumulate-and-hold baseline. If value-averaging implies the portfolio is far above its target path, the contribution is merely reduced (never a forced sale under the paper mandate). Redemption is modelled only for reporting horizons.",
+      "filters": [
+        "broad-market, high-liquidity index ETF",
+        "low expense ratio / tight tracking",
+        "cap per-period top-up to bound cash-flow and cost drag",
+        "fixed contribution cadence with annual step-up",
+        "long-only, unlevered accumulation"
+      ],
+      "rationale": "Step-up SIPs align contributions with rising Indian incomes, while value-averaging mechanically buys more units when prices are depressed and fewer when they are rich, historically lowering the average cost per unit versus a flat SIP. It is the more honest accumulation benchmark for disciplined long-term investors.",
+      "data_requirements": [
+        "daily OHLCV index ETF",
+        "contribution schedule",
+        "step-up rate",
+        "target value-path parameters",
+        "unit accounting",
+        "expense ratio"
+      ],
+      "tags": [
+        "sip",
+        "step_up",
+        "value_averaging",
+        "dca",
+        "accumulation",
+        "long_term",
+        "long"
+      ],
+      "risk": {
+        "paper_capital": "50000",
+        "max_trade_loss": "0",
+        "max_daily_loss": "0",
+        "max_premium_exposure": "50000",
+        "max_trades_per_day": 1,
+        "max_open_positions": 1
+      }
+    },
+    {
+      "id": "niftybees_goldbees_allocation_scorecard",
+      "name": "NIFTYBEES / GOLDBEES 2-Asset Allocation Scorecard",
+      "desk": "investment",
+      "family": "allocation",
+      "instrument": "portfolio",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "portfolio",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A two-asset portfolio construction study that blends a broad-equity ETF proxy (NIFTYBEES) with a gold ETF proxy (GOLDBEES) to study how a simple equity-plus-gold mix smooths the return path for Indian investors. Scorecard-only pending portfolio accounting and rebalance-cost modelling.",
+      "entry": "No paper trades emitted. Studies static and lightly adaptive weight splits between the equity and gold ETF proxies (for example a fixed 70/30 sleeve and an inverse-volatility variant), evaluating periodic rebalancing back to target weights and the resulting risk-adjusted return profile.",
+      "exit": "No positions. Target weights are restored at each rebalance study point; the study records how the split drifts between rebalances and how rebalancing frequency affects turnover and outcome.",
+      "filters": [
+        "liquid, low-tracking-error ETF proxy per asset (equity, gold)",
+        "rebalance-band and rebalance-frequency awareness (turnover cost)",
+        "robust volatility estimation window for the adaptive variant",
+        "governance: two-asset scope only, no single-name concentration",
+        "long-only, unlevered"
+      ],
+      "rationale": "Gold has historically been a low-to-negative correlation diversifier to Indian equities and a rupee-depreciation and crisis hedge; studying a disciplined equity-plus-gold split quantifies how much drawdown smoothing a very simple two-ETF mix can add before any multi-asset engine is committed to paper capital.",
+      "data_requirements": [
+        "multi-asset ETF history",
+        "volatility estimates",
+        "correlation matrix",
+        "rebalance schedule"
+      ],
+      "tags": [
+        "allocation",
+        "gold",
+        "equity",
+        "two_asset",
+        "diversification",
+        "portfolio",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "momentum_factor_composite_scorecard",
+      "name": "Momentum Factor Composite Scorecard",
+      "desk": "investment",
+      "family": "factor_composite",
+      "instrument": "basket",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A single-factor scorecard that ranks the liquid NSE universe by 12-1 month price momentum (twelve-month return skipping the most recent month) to surface a research basket of persistent leaders. Scorecard-only until portfolio accounting and rebalance-cost modelling are wired.",
+      "entry": "No paper trades emitted. Computes each name's trailing twelve-month return excluding the most recent month (12-1 momentum), normalises within sector, ranks the universe, and forms a top-decile research basket, studying periodic (e.g. monthly/quarterly) reconstitution.",
+      "exit": "No positions. Names fall out of the study basket when their momentum rank decays below the inclusion threshold at the next reconstitution; the study logs the turnover this implies.",
+      "filters": [
+        "liquidity floor for investability",
+        "sector-relative normalisation to avoid single-sector crowding",
+        "skip the most recent month to reduce short-term reversal drag",
+        "reconstitution-turnover and cost awareness",
+        "long-only, unlevered basket study"
+      ],
+      "rationale": "Cross-sectional price momentum is one of the most persistent factor premia documented in Indian equities; skipping the most recent month sidesteps short-term reversal, and a sector-normalised composite reduces the concentration and crash tendencies of raw momentum before any capital is allocated.",
+      "data_requirements": [
+        "daily OHLCV equities",
+        "momentum ranks",
+        "sector classification",
+        "liquidity/turnover",
+        "reconstitution schedule"
+      ],
+      "tags": [
+        "factor",
+        "momentum",
+        "12_1_momentum",
+        "composite",
+        "basket",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "low_volatility_portfolio_scorecard",
+      "name": "Low-Volatility Portfolio Scorecard",
+      "desk": "investment",
+      "family": "low_volatility",
+      "instrument": "portfolio",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "portfolio",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A portfolio construction study that ranks the liquid NSE universe by trailing realised volatility (and optionally beta) and builds a low-volatility research portfolio, studying inverse-volatility weighting versus equal weight. Scorecard-only pending portfolio accounting.",
+      "entry": "No paper trades emitted. Estimates each name's trailing realised volatility over a rolling window, ranks the universe from calmest to most volatile, selects the lowest-volatility cohort subject to sector caps, and studies both equal-weight and inverse-volatility weighting of that cohort.",
+      "exit": "No positions. Constituents and weights are recomputed at each rebalance study point as realised volatilities shift; the study records how membership and weights migrate and the turnover cost implied.",
+      "filters": [
+        "liquidity floor for investability",
+        "robust realised-volatility estimation window",
+        "sector caps to prevent defensive-sector concentration",
+        "rebalance-cost and turnover awareness",
+        "long-only, unlevered"
+      ],
+      "rationale": "The low-volatility anomaly (calmer stocks delivering competitive returns at lower risk) is well documented in Indian equities and pairs naturally with the behavioural durability long-term investors need; studying the construction quantifies its drawdown and turnover profile before portfolio accounting is committed.",
+      "data_requirements": [
+        "daily OHLCV equities",
+        "volatility estimates",
+        "beta estimates",
+        "sector classification",
+        "correlation matrix",
+        "rebalance schedule"
+      ],
+      "tags": [
+        "factor",
+        "low_volatility",
+        "minimum_variance",
+        "portfolio",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "value_factor_composite_scorecard",
+      "name": "Value Factor Composite Scorecard",
+      "desk": "investment",
+      "family": "factor_composite",
+      "instrument": "basket",
+      "timeframe": "long_term",
+      "direction": "long",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A single-factor scorecard that ranks the liquid NSE universe on a composite valuation tilt (earnings yield and book yield, i.e. inverse P/E and inverse P/B) to surface a research basket of statistically cheap names. Scorecard-only until fundamentals and portfolio accounting are wired.",
+      "entry": "No paper trades emitted. Builds a blended value score from earnings yield (E/P) and book yield (B/P), optionally adding cash-flow yield, normalises the components within sector, ranks the universe, and forms a cheap-cohort research basket studied on a quarterly reconstitution cadence.",
+      "exit": "No positions. Names leave the study basket when their composite value score re-rates above the inclusion threshold at the next reconstitution; the study logs the resulting turnover and any value-trap flags.",
+      "filters": [
+        "sufficient fundamental history for stable ratios",
+        "exclude extreme-leverage / governance-flag names (value-trap guard)",
+        "liquidity floor for investability",
+        "sector-relative normalisation of valuation ratios",
+        "long-only, unlevered basket study"
+      ],
+      "rationale": "A composite value tilt diversifies across correlated cheapness signals rather than relying on a single ratio, reducing the accounting noise and value-trap risk of any one metric; the earnings/book-yield blend has a long history as a return premium in Indian equities when combined with a leverage and governance screen.",
+      "data_requirements": [
+        "fundamental statements",
+        "valuation ratios",
+        "earnings yield",
+        "book yield",
+        "sector classification",
+        "liquidity",
+        "reconstitution schedule"
+      ],
+      "tags": [
+        "factor",
+        "value",
+        "earnings_yield",
+        "book_yield",
+        "composite",
+        "basket",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "momentum_crash_guard_overlay_scorecard",
+      "name": "Momentum Crash-Guard Overlay Scorecard",
+      "desk": "investment",
+      "family": "momentum_crash_guard",
+      "instrument": "portfolio",
+      "timeframe": "long_term",
+      "direction": "none",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A portfolio overlay study that de-risks a momentum basket during the bear-market rebound regimes where momentum historically crashes, scaling exposure by the market regime and by the recent volatility of the momentum strategy itself. Scorecard-only overlay.",
+      "entry": "No paper trades emitted. Studies a rule that scales a momentum sleeve's exposure down when the broad market is in a drawdown/bear regime (e.g. index below its long-term average with elevated realised volatility) and up as the regime normalises, using a volatility-scaled target so exposure falls as the sleeve's own volatility spikes.",
+      "exit": "No positions of its own. The overlay continuously adjusts the momentum sleeve's target weight at each study point; it holds no independent book and emits no directional signal.",
+      "filters": [
+        "broad-market regime classifier (trend + realised volatility)",
+        "volatility-scaled exposure target for the momentum sleeve",
+        "avoid excessive de-risk/re-risk turnover (hysteresis band)",
+        "governance: overlay only, never a standalone signal",
+        "long-only, unlevered"
+      ],
+      "rationale": "Momentum's rare but severe crashes cluster in panicky bear-market rebounds when past losers snap back hardest; conditioning exposure on the market regime and on the strategy's own volatility has historically defanged those tail losses, so studying the overlay quantifies how much crash protection it adds before portfolio accounting is committed.",
+      "data_requirements": [
+        "momentum ranks",
+        "portfolio equity curve",
+        "market regime indicators",
+        "realised volatility",
+        "drawdown series"
+      ],
+      "tags": [
+        "momentum_crash_guard",
+        "overlay",
+        "volatility_scaling",
+        "regime",
+        "portfolio",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
+      "risk": null
+    },
+    {
+      "id": "rebalance_bands_tax_harvest_overlay_scorecard",
+      "name": "Rebalance-Bands / Tax-Loss-Harvest Overlay Scorecard",
+      "desk": "investment",
+      "family": "rebalance",
+      "instrument": "portfolio",
+      "timeframe": "long_term",
+      "direction": "none",
+      "structure": "none",
+      "executable": false,
+      "option_selling": false,
+      "lifecycle_status": "research_candidate",
+      "paper_only": true,
+      "live_orders_enabled": false,
+      "description": "A portfolio maintenance overlay study that compares calendar rebalancing against tolerance-band rebalancing and layers a tax-loss-harvesting study, quantifying the trade-off between tracking a target allocation, turnover cost, and after-tax outcomes for Indian investors. Scorecard-only overlay.",
+      "entry": "No paper trades emitted. Studies when to rebalance a target allocation using tolerance bands (act only when a sleeve drifts beyond a set percentage of its target) versus fixed calendar dates, and separately studies harvesting unrealised losses to offset gains while respecting a wash-sale-style re-entry gap and India's short/long-term capital-gains distinction.",
+      "exit": "No positions. Weights are nudged back toward target only when a band is breached (or a calendar date arrives) at each study point; harvesting actions are recorded hypothetically with their modelled tax effect, never as live trades.",
+      "filters": [
+        "tolerance-band width vs calendar-cadence comparison",
+        "turnover and transaction-cost awareness (STT/brokerage drag)",
+        "wash-sale-style re-entry gap to keep harvesting legitimate",
+        "respect short-term vs long-term capital-gains treatment",
+        "governance: overlay only, long-only, unlevered"
+      ],
+      "rationale": "Band-based rebalancing typically controls allocation drift at materially lower turnover than rigid calendar rebalancing, and disciplined tax-loss harvesting can add measurable after-tax return; studying both as an overlay quantifies the cost-versus-control and after-tax trade-offs before any live portfolio maintenance is wired.",
+      "data_requirements": [
+        "portfolio weights history",
+        "target allocation",
+        "turnover/cost estimates",
+        "unrealised gain/loss lots",
+        "holding-period and tax rules"
+      ],
+      "tags": [
+        "rebalance",
+        "tolerance_bands",
+        "tax_loss_harvesting",
+        "overlay",
+        "portfolio",
+        "long_term",
+        "scorecard",
+        "non_executable"
+      ],
       "risk": null
     }
   ]
