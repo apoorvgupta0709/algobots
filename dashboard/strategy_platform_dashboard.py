@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Read-only Streamlit dashboard for the India strategy platform.
 
-Three desks — consolidated **Options Desk**, **Equities Desk**, **Investment Desk** —
-showing each strategy's lifecycle status, one-month paper-trial metrics/progress, a
-platform safety panel, and per-strategy explainability (what it does / enters /
-exits / filters / rationale).
+Four desks — consolidated **Options Desk**, **Equities Desk**, **Investment Desk**,
+and a scorecard-only **Futures Desk** — showing each strategy's lifecycle status,
+one-month paper-trial metrics/progress, a platform safety panel, and per-strategy
+explainability (what it does / enters / exits / filters / rationale).
 
 Safety design (identical stance to the BankNifty monitor):
 - No FYERS/broker order calls. No LLM/network calls.
@@ -185,11 +185,18 @@ def sample_universe() -> StrategyUniverse:
               option_selling=False, lifecycle_status=LifecycleStatus.RESEARCH_CANDIDATE,
               description="Inverse-volatility weighted multi-asset allocation study.",
               entry="n/a (allocation study).", exit="n/a (allocation study)."),
+        strat(id="positional_futures_trend_scorecard", name="Positional Futures Trend (Scorecard)", desk=Desk.FUTURES,
+              family="futures_trend", instrument=Instrument.FUTURES, timeframe=Timeframe.POSITIONAL,
+              direction=Direction.DIRECTIONAL, structure=Structure.SINGLE_LEG, executable=False,
+              option_selling=False, lifecycle_status=LifecycleStatus.RESEARCH_CANDIDATE,
+              description="Positional trend on NSE index futures — scorecard only; leveraged, undefined overnight-gap risk is never executable.",
+              entry="n/a (scorecard only).", exit="n/a (scorecard only)."),
     )
     desks = {
         Desk.OPTIONS: DeskInfo(Desk.OPTIONS, "Options Desk", "Defined-risk index-option strategies; short premium is scorecard-only."),
         Desk.EQUITIES: DeskInfo(Desk.EQUITIES, "Equities Desk", "Intraday/swing cash-equity long strategies."),
         Desk.INVESTMENT: DeskInfo(Desk.INVESTMENT, "Investment Desk", "Positional / long-term allocation and momentum studies."),
+        Desk.FUTURES: DeskInfo(Desk.FUTURES, "Futures Desk", "NSE index/stock futures trend and arbitrage studies — scorecard-only (leveraged, undefined-risk)."),
     }
     return StrategyUniverse(
         schema_version="sample", paper_only=True, live_orders_enabled=False,
@@ -497,8 +504,8 @@ def main() -> None:  # pragma: no cover - exercised by Streamlit smoke import + 
     else:
         st.error("Platform safety checks FAILED — do not trust the platform until resolved.")
 
-    tab_safety, tab_options, tab_equities, tab_investment = st.tabs(
-        ["Safety", "Options Desk", "Equities Desk", "Investment Desk"]
+    tab_safety, tab_options, tab_equities, tab_investment, tab_futures = st.tabs(
+        ["Safety", "Options Desk", "Equities Desk", "Investment Desk", "Futures Desk"]
     )
 
     with tab_safety:
@@ -507,7 +514,7 @@ def main() -> None:  # pragma: no cover - exercised by Streamlit smoke import + 
             with cols[i % 2]:
                 (st.success if check.ok else st.error)(f"{check.name}: {'OK' if check.ok else 'FAIL'} — {check.detail}")
 
-    for tab, desk in ((tab_options, Desk.OPTIONS), (tab_equities, Desk.EQUITIES), (tab_investment, Desk.INVESTMENT)):
+    for tab, desk in ((tab_options, Desk.OPTIONS), (tab_equities, Desk.EQUITIES), (tab_investment, Desk.INVESTMENT), (tab_futures, Desk.FUTURES)):
         with tab:
             info = universe.desks.get(desk)
             if info:

@@ -47,6 +47,7 @@ class Desk(str, Enum):
     OPTIONS = "options"
     EQUITIES = "equities"
     INVESTMENT = "investment"
+    FUTURES = "futures"
 
 
 class Instrument(str, Enum):
@@ -55,6 +56,7 @@ class Instrument(str, Enum):
     INDEX_OPTION = "index_option"
     BASKET = "basket"
     PORTFOLIO = "portfolio"
+    FUTURES = "futures"
 
 
 class Timeframe(str, Enum):

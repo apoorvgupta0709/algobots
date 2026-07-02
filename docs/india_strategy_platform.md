@@ -17,7 +17,7 @@ with a one-month paper-qualification workflow and a read-only dashboard.
 | Registry | `config/strategy_universe_india.json` | Declarative strategy universe (metadata only). |
 | Registry loader | `scripts/strategy_registry.py` | Typed dataclasses/enums; load + validate + enforce safety rails. |
 | Qualification | `scripts/strategy_qualification.py` | Decimal-safe metrics, one-month trial evaluator, Markdown/CSV reports, manual approval. |
-| Dashboard | `dashboard/strategy_platform_dashboard.py` | Read-only Streamlit monitor across three desks with a safety panel. |
+| Dashboard | `dashboard/strategy_platform_dashboard.py` | Read-only Streamlit monitor across four desks with a safety panel. |
 | Tests | `tests/test_strategy_registry.py`, `tests/test_strategy_qualification.py`, `tests/test_strategy_platform_dashboard.py` | Safety rails, metric correctness, dashboard adapters. |
 
 Data flow:
@@ -40,7 +40,7 @@ grant_live_eligibility()  ── manual, explicit, enables no orders ──►  
 
 Every strategy is one entry in `config/strategy_universe_india.json` with a fixed,
 typed schema (see `StrategyDefinition` / `StrategyRisk` in `scripts/strategy_registry.py`).
-Strategies are grouped into three **desks**:
+Strategies are grouped into four **desks**:
 
 - **Options Desk** — NSE index options (NIFTY / BANKNIFTY / FINNIFTY). Executable
   strategies are long-only or debit-defined-risk (single leg or debit spread).
@@ -56,6 +56,25 @@ Strategies are grouped into three **desks**:
   200-DMA regime timing, SIP baseline (the buy-and-hold benchmark), plus
   scorecard-only quality/value/growth composite, sector rotation, risk parity,
   drawdown-controlled allocation, and an overfitting/robustness gate.
+- **Futures Desk** — NSE index/stock **futures** studies (positional trend,
+  cash-futures basis arbitrage, calendar/curve spreads). **Scorecard-only:** every
+  entry is non-executable because index/stock futures are leveraged, undefined-risk,
+  overnight-gap instruments that fall outside the defined-risk executable set. No
+  broker order code exists here — the desk produces scorecards and backtests only.
+
+### Compendium reconciliation
+
+The registry is reconciled to the `Indian_Markets_Trading_Strategy_Compendium.pdf`
+(49 strategy sections across 6 chapters). Every section maps to a registry strategy
+id — 25 new entries, 11 enriched in place, 15 already covered — bringing the universe
+to **93 strategies** across the four desks: Options (31), Equities (32),
+Investment (27), and the new scorecard-only Futures (3). Of these, 46 are executable
+(long / debit / defined-risk) and 47 are scorecard-only. The reconciliation added
+exactly **one** new executable strategy, `index_long_call_put_directional` (6.1) — an
+index-only, single-leg, premium-capped defined-risk long; every short-premium,
+single-stock-option, and futures study is scorecard-only. The full section-by-section
+audit lives in
+[`docs/indian_markets_strategy_compendium_mapping.md`](indian_markets_strategy_compendium_mapping.md).
 
 ### Executable vs scorecard-only
 
@@ -159,8 +178,9 @@ uv run pytest tests/test_strategy_registry.py tests/test_strategy_qualification.
 
 ## Dashboard
 
-Three tabs mirror the desks (consolidated **Options Desk**, **Equities Desk**,
-**Investment Desk**) plus a **Safety** tab. For each strategy it shows lifecycle
+Four tabs mirror the desks (consolidated **Options Desk**, **Equities Desk**,
+**Investment Desk**, and the scorecard-only **Futures Desk**) plus a **Safety** tab.
+For each strategy it shows lifecycle
 status, one-month trial metrics + PASS/FAIL, and explainability (what it does / when
 it enters / when it exits / filters / rationale). The dashboard:
 

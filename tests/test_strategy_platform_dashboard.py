@@ -92,7 +92,7 @@ def test_build_desk_view_groups_and_metrics():
     trades = normalize_trades(sample_trades())
     window = TrialWindow.one_month_from(date(2026, 6, 1))
     view = dash.build_desk_view(universe, trades, window=window)
-    assert {Desk.OPTIONS, Desk.EQUITIES, Desk.INVESTMENT} <= set(view.keys())
+    assert {Desk.OPTIONS, Desk.EQUITIES, Desk.INVESTMENT, Desk.FUTURES} <= set(view.keys())
     for views in view.values():
         for sv in views:
             if sv.strategy.executable:

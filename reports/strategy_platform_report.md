@@ -6,7 +6,7 @@
 
 - Registry: `/opt/data/algobots-strategy-universe-20260702-075240/config/strategy_universe_india.json` (schema 1.0)
 - Qualification config: `/opt/data/algobots-strategy-universe-20260702-075240/config/strategy_qualification.json`
-- Total strategies: **68** — 40 executable, 28 scorecard-only
+- Total strategies: **93** — 46 executable, 47 scorecard-only
 
 ## Safety posture
 
@@ -20,9 +20,10 @@
 
 | Desk | Total | Executable | Scorecard-only |
 | --- | ---: | ---: | ---: |
-| Options Desk | 25 | 11 | 14 |
-| Equities Desk | 25 | 22 | 3 |
-| Investment Desk | 18 | 7 | 11 |
+| Options Desk | 31 | 12 | 19 |
+| Equities Desk | 32 | 27 | 5 |
+| Investment Desk | 27 | 7 | 20 |
+| Futures Desk | 3 | 0 | 3 |
 
 ## Lifecycle funnel
 
@@ -30,10 +31,10 @@ Backtest → paper → qualified progression. The terminal `live_eligible_requir
 
 | Lifecycle status | Count |
 | --- | ---: |
-| research_candidate | 33 |
-| backtest_ready | 19 |
+| research_candidate | 49 |
+| backtest_ready | 27 |
 | backtested | 9 |
-| paper_enabled | 2 |
+| paper_enabled | 3 |
 | paper_observing | 4 |
 | qualified | 1 |
 | live_eligible_requires_manual_approval | 0 |
