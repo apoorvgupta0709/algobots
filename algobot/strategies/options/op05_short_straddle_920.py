@@ -16,7 +16,7 @@ from __future__ import annotations
 import pandas as pd
 
 from algobot.core.enums import Category, Side, SignalType, Timeframe
-from algobot.core.models import ExpiryRule, Signal
+from algobot.core.models import ExpiryRule, Signal, SizeHint
 from algobot.core.strategy import SCAN_0920_ONCE, StrategyBase, StrategyContext, StrategyMeta
 from algobot.options.structures import straddle
 
@@ -91,11 +91,16 @@ class ShortStraddle920Strategy(StrategyBase):
 
         # short-vol position: the underlying band proxies the per-leg stops;
         # a breach on either side exits the whole structure via the monitor.
+        # Sizing: the 9:20 straddle trades one lot per leg — naked margin
+        # (capital_required), not premium risk, is the binding constraint, and
+        # the central credit sizer (risk_amt // margin, min 1) resolves to
+        # exactly 1 lot at the required capital; SizeHint(qty=1) states that
+        # explicitly so the structure fills at any capital allocation.
         return [Signal(
             strategy_id=self.strategy_id, signal_type=SignalType.ENTRY_SHORT,
             instrument=sym, timestamp=ctx.now, reference_price=close,
             stop_loss=close + band, take_profit=close - band,
-            structure=structure,
+            structure=structure, size_hint=SizeHint(qty=1),
             tags={"first_bar_range_pct": first_range_pct, "gap_pct": gap_pct},
             reason=(f"9:20 straddle: first bar {first_range_pct:.2f}%, "
                     f"gap {gap_pct:.2f}%, band +/-{p['band_pct']:.2f}%"))]
