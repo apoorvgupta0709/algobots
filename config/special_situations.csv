@@ -1,0 +1,4 @@
+symbol,event_type,entry_by,exit_by,notes
+NSE:INFY-EQ,buyback,2024-08-16,2024-12-05,SYNTHETIC SAMPLE (inert past dates) - tender-route buyback; small-shareholder quota play
+NSE:ITC-EQ,demerger,2024-10-31,2025-01-06,SYNTHETIC SAMPLE (inert past dates) - hotels demerger record-date situation
+NSE:LT-EQ,index_inclusion,2024-06-21,2024-09-30,SYNTHETIC SAMPLE (inert past dates) - index-inclusion passive-flow trade
