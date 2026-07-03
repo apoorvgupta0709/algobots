@@ -83,6 +83,8 @@ class DividendYieldStrategy(StrategyBase):
         fund = ctx.extras.get("fundamentals")
         if fund is None:
             fund = self._fundamentals.get(symbols)
+        elif isinstance(fund, FundamentalsProvider):
+            fund = fund.get(symbols)
         else:
             fund = fund.reindex(symbols)
         if fund is None or fund.empty or fund.dropna(how="all").empty:

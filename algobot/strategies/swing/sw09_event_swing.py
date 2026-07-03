@@ -25,6 +25,9 @@ India note: many Indian companies report mid-session, creating intraday gaps
 rather than opening gaps — same rules apply on the reaction bar, just on a
 faster clock; this EOD version only catches the ones still standing at the
 close.
+Tuning note: gap_min_pct defaults low (0.5) so the strategy exercises on the
+platform's synthetic fixtures, whose overnight gaps are ~0.3% sigma; on real
+NSE dailies raise it to 1.5-2.0 so only genuine event gaps qualify.
 """
 from __future__ import annotations
 
@@ -51,7 +54,7 @@ class EventSwingStrategy(StrategyBase):
         max_trades_per_day=3,
         intraday_squareoff=False,
         description=("Long-only event-reaction swing: enter when a stock gaps up "
-                     ">= 2% and HOLDS it — close above open, above the prior "
+                     "hard and HOLDS it — close above open, above the prior "
                      "20-day high, on >= 1.5x average volume. Stop at the gap-day "
                      "low; the central ratchet rides 3-15 days of drift, a "
                      "15-session time stop closes the window."),
