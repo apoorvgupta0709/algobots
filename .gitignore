@@ -1,44 +1,16 @@
-# Secrets / credentials
 .env
-.env.*
-!.env.example
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+/data/
+!/data/.gitkeep
+*.db
+*.sqlite3
+.venv/
+venv/
+.coverage
+dist/
+build/
 *.pem
 *.key
-*.crt
-*.p12
-*.pfx
-*.secret
-*.token
-
-# Runtime PostgreSQL / local state
-pgdata/
-pgroot/
-run/
-logs/
-*.log
-*.pid
-
-# Python / uv
-.venv/
-.uv-cache/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Generated/binary artifacts
-pkg/
-*.deb
-*.pdf
-*.png
-*.jpg
-*.jpeg
-*.mp4
-*.zip
-
-# Hermes local state
-.hermes/
-
-# macOS
-.DS_Store

@@ -1,0 +1,75 @@
+"""Settings loader: config/*.yaml merged with environment variables.
+
+Precedence: env var > yaml > default. DB-level per-strategy overrides
+(strategies table) are applied later by engine/lifecycle.py.
+"""
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import yaml
+from dotenv import load_dotenv
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CONFIG_DIR = REPO_ROOT / "config"
+
+load_dotenv(REPO_ROOT / ".env")
+
+
+def _read_yaml(name: str) -> dict:
+    path = CONFIG_DIR / name
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text()) or {}
+
+
+@lru_cache(maxsize=None)
+def settings() -> dict[str, Any]:
+    cfg = _read_yaml("settings.yaml")
+    cfg.setdefault("capital", 500_000)
+    cfg.setdefault("risk", {})
+    cfg["risk"].setdefault("risk_per_trade_pct", 0.75)     # % of capital risked per trade
+    cfg["risk"].setdefault("daily_loss_cap_pct", 2.5)
+    cfg["risk"].setdefault("weekly_loss_cap_pct", 5.0)
+    cfg["risk"].setdefault("max_concurrent_positions", 3)
+    cfg["risk"].setdefault("max_trades_per_day", 10)       # global, across strategies
+    cfg["risk"].setdefault("breakeven_at_r", 0.8)
+    cfg["risk"].setdefault("ratchet_lock_pct", 60)
+    cfg.setdefault("engine", {})
+    cfg["engine"].setdefault("scan_interval_min", 5)
+    cfg["engine"].setdefault("monitor_interval_sec", 15)
+    cfg["engine"].setdefault("squareoff_time", "15:15")
+    cfg["engine"].setdefault("eod_scan_time", "15:45")
+    cfg["engine"].setdefault("token_refresh_time", "08:45")
+    cfg.setdefault("data_cache_dir", str(REPO_ROOT / "data" / "cache"))
+    cfg["database_url"] = os.getenv(
+        "DATABASE_URL", cfg.get("database_url", f"sqlite:///{REPO_ROOT}/data/algobot.db"))
+    return cfg
+
+
+@lru_cache(maxsize=None)
+def gate_config() -> dict[str, Any]:
+    cfg = _read_yaml("gate.yaml")
+    cfg.setdefault("min_paper_trades", 60)
+    cfg.setdefault("min_oos_backtest_months", 6)
+    cfg.setdefault("min_profit_factor", 1.3)
+    cfg.setdefault("max_drawdown_pct", 15.0)
+    cfg.setdefault("stop_fire_tolerance_pct", 0.5)   # avg |fill - modeled| / modeled
+    cfg.setdefault("synthetic_backtest_discount", 0.5)  # weight for synthetic-data runs
+    return cfg
+
+
+def strategies_config() -> dict[str, Any]:
+    """Per-strategy config from config/strategies.yaml: {strategy_id: {mode, params, capital}}."""
+    return _read_yaml("strategies.yaml").get("strategies", {}) or {}
+
+
+def strategies_defaults() -> dict[str, Any]:
+    return _read_yaml("strategies.yaml").get("defaults", {}) or {}
+
+
+def env(key: str, default: str | None = None) -> str | None:
+    return os.getenv(key, default)

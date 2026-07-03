@@ -1,0 +1,21 @@
+# Global platform settings. Env vars override (DATABASE_URL).
+capital: 500000            # total account capital (INR)
+
+risk:
+  risk_per_trade_pct: 0.75       # % of capital risked per trade (compendium: 0.5-1%)
+  daily_loss_cap_pct: 2.5        # stop trading for the day at -2.5%
+  weekly_loss_cap_pct: 5.0       # stop for the week at -5%
+  max_concurrent_positions: 3
+  max_trades_per_day: 10         # global across all strategies
+  breakeven_at_r: 0.8            # move stop to entry at +0.8R
+  ratchet_lock_pct: 60           # trail locks 60% of max favourable excursion
+
+engine:
+  scan_interval_min: 5           # intraday entry scan cadence
+  monitor_interval_sec: 15       # open-position SL/TP monitor loop
+  squareoff_time: "15:15"        # start flattening intraday books
+  eod_scan_time: "15:45"         # daily/positional strategies
+  token_refresh_time: "08:45"    # broker login before open
+
+data_cache_dir: data/cache
+# database_url: set via DATABASE_URL env (docker-compose uses postgres)

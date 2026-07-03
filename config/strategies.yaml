@@ -1,0 +1,71 @@
+# Per-strategy configuration. Any strategy not listed runs with `defaults`.
+# mode: off | backtest | paper | live   (live requires a passing gate + explicit promotion)
+# params: overrides merged over the strategy file's meta.params
+# capital: rupees allocated to the strategy (risk sizing base)
+#
+# EVERYTHING SHIPS IN PAPER MODE. Promote via POST /strategies/{id}/promote or
+# the dashboard once gate_status.eligible is true.
+
+defaults:
+  mode: paper
+  capital: 100000
+
+strategies:
+  # --- intraday (index-first) ---
+  id01_orb:            { mode: paper, capital: 100000 }
+  id02_vwap_meanrev:   { mode: paper, capital: 100000 }
+  id03_vwap_trend:     { mode: paper, capital: 100000 }
+  id04_cpr:            { mode: paper, capital: 100000 }
+  id05_gap:            { mode: paper, capital: 100000 }
+  id06_pullback_cont:  { mode: paper, capital: 100000 }
+  id07_momentum_burst: { mode: paper, capital: 100000 }
+  id08_range_fade:     { mode: paper, capital: 100000 }
+
+  # --- swing / positional ---
+  sw01_darvas_52wk:    { mode: paper, capital: 150000 }
+  sw02_pullback_trend: { mode: paper, capital: 150000 }
+  sw03_ma_crossover:   { mode: paper, capital: 150000 }
+  sw04_supertrend_adx: { mode: paper, capital: 150000 }
+  sw05_rsi_meanrev:    { mode: paper, capital: 150000 }
+  sw06_bb_squeeze:     { mode: paper, capital: 150000 }
+  sw07_chart_patterns: { mode: paper, capital: 150000 }
+  sw08_rs_leaders:     { mode: paper, capital: 150000 }
+  sw09_event_swing:    { mode: paper, capital: 150000 }
+  sw10_pair_trading:   { mode: paper, capital: 400000 }
+
+  # --- options ---
+  op01_long_call_put:    { mode: paper, capital: 100000 }
+  op02_debit_vertical:   { mode: paper, capital: 100000 }
+  op03_credit_vertical:  { mode: paper, capital: 200000 }
+  op04_short_strangle:   { mode: paper, capital: 500000 }
+  op05_short_straddle_920: { mode: paper, capital: 500000 }
+  op06_iron_condor:      { mode: paper, capital: 150000 }
+  op07_iron_butterfly:   { mode: paper, capital: 150000 }
+  op08_covered_call:     { mode: paper, capital: 600000 }
+  op09_csp:              { mode: paper, capital: 600000 }
+  op10_long_vol_event:   { mode: paper, capital: 100000 }
+  op11_calendar:         { mode: paper, capital: 150000 }
+  op12_pmcc_diagonal:    { mode: paper, capital: 150000 }
+  op13_ratio_backspread: { mode: paper, capital: 200000 }
+  op14_expiry_day:       { mode: paper, capital: 150000 }
+  op15_gamma_scalp:      { mode: paper, capital: 500000 }
+
+  # --- futures / arbitrage ---
+  fu01_trend_positional: { mode: paper, capital: 1000000 }
+  fu02_cash_futures_arb: { mode: paper, capital: 1800000 }
+  fu03_calendar_spread:  { mode: paper, capital: 500000 }
+
+  # --- long-term investing (EOD/calendar screens; delivery orders) ---
+  lt01_index_core:       { mode: paper, capital: 200000 }
+  lt02_sip:              { mode: paper, capital: 300000 }
+  lt03_rebalance:        { mode: paper, capital: 300000 }
+  lt04_graham_value:     { mode: paper, capital: 300000 }
+  lt05_coffee_can:       { mode: paper, capital: 300000 }
+  lt06_garp:             { mode: paper, capital: 300000 }
+  lt07_dividend_yield:   { mode: paper, capital: 300000 }
+  lt08_momentum_12_1:    { mode: paper, capital: 300000 }
+  lt09_low_vol:          { mode: paper, capital: 300000 }
+  lt10_magic_formula:    { mode: paper, capital: 300000 }
+  lt11_canslim:          { mode: paper, capital: 300000 }
+  lt12_special_situations: { mode: paper, capital: 200000 }
+  lt13_sector_rotation:  { mode: paper, capital: 300000 }
