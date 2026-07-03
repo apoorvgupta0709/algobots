@@ -44,7 +44,7 @@ class EventSwingStrategy(StrategyBase):
         scan_schedule=SCAN_EOD,
         instruments=["NIFTY50_UNIVERSE"],
         warmup_bars=40,
-        params={"gap_min_pct": 1.2, "vol_mult": 1.5, "lookback": 20,
+        params={"gap_min_pct": 0.5, "vol_mult": 1.5, "lookback": 20,
                 "max_hold_days": 15, "max_new_entries": 2},
         capital_required=150_000,
         max_positions=3,
