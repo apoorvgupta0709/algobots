@@ -55,15 +55,17 @@ def _parse(symbol: str) -> Optional[tuple[str, dt.date, float, str]]:
         from algobot.data.instruments import parse_option_symbol  # lazy
         parsed = parse_option_symbol(symbol)
         if parsed is not None:
-            root = getattr(parsed, "root", None) or parsed["root"]
-            expiry = getattr(parsed, "expiry", None) or parsed["expiry"]
-            strike = getattr(parsed, "strike", None) or parsed["strike"]
-            opt = (getattr(parsed, "option_type", None) or parsed["option_type"])
+            get = parsed.get if isinstance(parsed, dict) else \
+                (lambda k: getattr(parsed, k, None))
+            root, expiry, strike = get("root"), get("expiry"), get("strike")
+            opt = get("opt_type") or get("option_type")
             if isinstance(expiry, str):
                 expiry = dt.date.fromisoformat(expiry[:10])
             elif isinstance(expiry, dt.datetime):
                 expiry = expiry.date()
-            return str(root), expiry, float(strike), str(getattr(opt, "value", opt))
+            if None not in (root, expiry, strike, opt):
+                return (str(root), expiry, float(strike),
+                        str(getattr(opt, "value", opt)))
     except Exception:
         pass
     return parse_option_symbol_fallback(symbol)
