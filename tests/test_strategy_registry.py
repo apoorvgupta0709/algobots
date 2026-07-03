@@ -15,8 +15,10 @@ from scripts.strategy_registry import (  # noqa: E402
     LIVE_ELIGIBLE_REQUIRES_MANUAL_APPROVAL,
     SHORT_PREMIUM_STRUCTURES,
     Desk,
+    Instrument,
     LifecycleStatus,
     RegistryError,
+    Structure,
     load_registry,
     next_lifecycle_status,
     parse_strategy,
@@ -79,7 +81,7 @@ def test_real_registry_loads_and_is_paper_only():
     assert universe.paper_only is True
     assert universe.live_orders_enabled is False
     assert len(universe.strategies) >= 30
-    assert set(universe.desks) == {Desk.OPTIONS, Desk.EQUITIES, Desk.INVESTMENT}
+    assert set(universe.desks) == {Desk.OPTIONS, Desk.EQUITIES, Desk.INVESTMENT, Desk.FUTURES}
 
 
 def test_real_registry_every_strategy_is_safe():
@@ -107,12 +109,89 @@ def test_real_registry_has_all_three_desks_populated():
     assert universe.by_desk(Desk.OPTIONS)
     assert universe.by_desk(Desk.EQUITIES)
     assert universe.by_desk(Desk.INVESTMENT)
+    assert universe.by_desk(Desk.FUTURES)
     assert universe.executable_strategies()
     assert universe.scorecard_strategies()
     # Short-premium families must all be scorecard-only.
     for family in ("straddle", "strangle", "iron_condor", "ratio"):
         for s in universe.by_family(family):
             assert s.executable is False, s.id
+
+
+def test_futures_desk_is_scorecard_only():
+    """Every futures-desk strategy is a non-executable scorecard with no risk block.
+
+    Index/stock futures are leveraged, undefined-risk, overnight-gap instruments; the
+    desk exists for research/backtest studies only and must never be executable.
+    """
+    universe = load_registry(REGISTRY_PATH)
+    futures = universe.by_desk(Desk.FUTURES)
+    assert futures, "futures desk must be populated"
+    for s in futures:
+        assert s.executable is False, s.id
+        assert s.risk is None, s.id
+
+
+def test_no_executable_single_stock_options():
+    """No options-desk executable strategy may touch single-stock/equity options.
+
+    Executable option strategies must be index options only (single-stock options carry
+    prohibitively wide round-trip spreads); single-stock option structures such as
+    covered calls / cash-secured puts stay scorecard-only.
+    """
+    universe = load_registry(REGISTRY_PATH)
+    for s in universe.by_desk(Desk.OPTIONS):
+        if s.executable:
+            assert s.instrument is Instrument.INDEX_OPTION, s.id
+
+
+def test_index_long_call_put_is_defined_risk_executable():
+    """The compendium's single long call/put (6.1) is an index-only defined-risk buy."""
+    universe = load_registry(REGISTRY_PATH)
+    s = universe.by_id("index_long_call_put_directional")
+    assert s is not None
+    assert s.executable is True
+    assert s.instrument is Instrument.INDEX_OPTION
+    assert s.structure is Structure.SINGLE_LEG
+    assert s.option_selling is False
+    assert s.risk is not None
+    assert s.risk.max_premium_exposure > 0
+
+
+def test_compendium_new_ids_present():
+    """All 25 new compendium strategy ids are present in the merged registry."""
+    universe = load_registry(REGISTRY_PATH)
+    new_ids = {
+        "passive_index_core_scorecard",
+        "strategic_asset_allocation_rebalance_scorecard",
+        "graham_value_screen_scorecard",
+        "quality_coffee_can_scorecard",
+        "garp_reasonable_growth_scorecard",
+        "dividend_yield_income_scorecard",
+        "magic_formula_india_scorecard",
+        "canslim_growth_momentum_scorecard",
+        "special_situations_event_scorecard",
+        "ma_crossover_swing_equity",
+        "supertrend_adx_trend_equity",
+        "bollinger_squeeze_breakout_equity",
+        "bollinger_band_reversion_equity",
+        "classical_chart_pattern_scorecard",
+        "intraday_pullback_continuation_equity",
+        "range_fade_support_resistance_equity",
+        "index_long_call_put_directional",
+        "iron_butterfly_scorecard",
+        "covered_call_income_scorecard",
+        "cash_secured_put_scorecard",
+        "diagonal_pmcc_scorecard",
+        "delta_neutral_gamma_scalping_scorecard",
+        "positional_futures_trend_scorecard",
+        "cash_futures_basis_arbitrage_scorecard",
+        "futures_calendar_spread_scorecard",
+    }
+    assert len(new_ids) == 25
+    present = {s.id for s in universe.strategies}
+    missing = sorted(new_ids - present)
+    assert not missing, f"missing compendium ids: {missing}"
 
 
 # --------------------------------------------------------------------------- #

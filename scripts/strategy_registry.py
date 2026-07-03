@@ -47,6 +47,7 @@ class Desk(str, Enum):
     OPTIONS = "options"
     EQUITIES = "equities"
     INVESTMENT = "investment"
+    FUTURES = "futures"
 
 
 class Instrument(str, Enum):
@@ -55,6 +56,7 @@ class Instrument(str, Enum):
     INDEX_OPTION = "index_option"
     BASKET = "basket"
     PORTFOLIO = "portfolio"
+    FUTURES = "futures"
 
 
 class Timeframe(str, Enum):
@@ -80,6 +82,10 @@ class Structure(str, Enum):
     IRON_CONDOR = "iron_condor"
     RATIO = "ratio"
     CALENDAR = "calendar"
+    BUTTERFLY = "butterfly"
+    CREDIT_SPREAD = "credit_spread"
+    COLLAR = "collar"
+    PROTECTIVE_PUT = "protective_put"
     PORTFOLIO = "portfolio"
     NONE = "none"
 
@@ -107,12 +113,26 @@ LIFECYCLE_ORDER: tuple[LifecycleStatus, ...] = (
     LifecycleStatus.LIVE_ELIGIBLE_REQUIRES_MANUAL_APPROVAL,
 )
 
-# Structures that can carry short/undefined-risk premium. Never executable here.
+# Structures that are short-premium / net-short-risk. Never executable here; the
+# loader forces them to scorecard-only regardless of any other flag. Credit spreads
+# are net-short premium; short/iron butterflies sit on short strikes — both belong
+# here. (A long butterfly is net-debit but still a multi-leg study, kept scorecard
+# only via EXECUTABLE_STRUCTURES below.)
 SHORT_PREMIUM_STRUCTURES: frozenset[Structure] = frozenset(
-    {Structure.STRADDLE, Structure.STRANGLE, Structure.IRON_CONDOR, Structure.RATIO}
+    {
+        Structure.STRADDLE,
+        Structure.STRANGLE,
+        Structure.IRON_CONDOR,
+        Structure.RATIO,
+        Structure.CREDIT_SPREAD,
+        Structure.BUTTERFLY,
+    }
 )
 
-# Structures an executable (long/debit) strategy is permitted to use.
+# Structures an executable (long/debit) strategy is permitted to use. Every other
+# structure (straddle/strangle/iron_condor/ratio/credit_spread/butterfly/calendar/
+# collar/protective_put) is scorecard-only: the validator rejects executable=true
+# for anything outside this set.
 EXECUTABLE_STRUCTURES: frozenset[Structure] = frozenset(
     {Structure.SINGLE_LEG, Structure.DEBIT_SPREAD, Structure.PORTFOLIO, Structure.NONE}
 )
@@ -347,7 +367,7 @@ def validate_strategy(strategy: StrategyDefinition) -> None:
         raise RegistryError(f"strategy {sid}: option-selling (short premium) strategies must not be executable")
     if strategy.structure in SHORT_PREMIUM_STRUCTURES and strategy.executable:
         raise RegistryError(
-            f"strategy {sid}: {strategy.structure.value} is an undefined/short-risk structure and must be scorecard-only (executable=false)"
+            f"strategy {sid}: {strategy.structure.value} is a short-premium / short-risk structure and must be scorecard-only (executable=false)"
         )
 
     if strategy.executable:
