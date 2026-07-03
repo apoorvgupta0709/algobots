@@ -25,9 +25,10 @@ India note: many Indian companies report mid-session, creating intraday gaps
 rather than opening gaps — same rules apply on the reaction bar, just on a
 faster clock; this EOD version only catches the ones still standing at the
 close.
-Tuning note: gap_min_pct defaults low (0.5) so the strategy exercises on the
-platform's synthetic fixtures, whose overnight gaps are ~0.3% sigma; on real
-NSE dailies raise it to 1.5-2.0 so only genuine event gaps qualify.
+Tuning note: gap_min_pct defaults to the compendium's 2.0 so only genuine
+event gaps qualify on real NSE dailies; the platform's synthetic fixtures gap
+at ~0.3% sigma and will rarely trade — lower to ~0.5 via config for synthetic
+testing.
 """
 from __future__ import annotations
 
@@ -47,7 +48,7 @@ class EventSwingStrategy(StrategyBase):
         scan_schedule=SCAN_EOD,
         instruments=["NIFTY50_UNIVERSE"],
         warmup_bars=40,
-        params={"gap_min_pct": 0.5, "vol_mult": 1.5, "lookback": 20,
+        params={"gap_min_pct": 2.0, "vol_mult": 1.5, "lookback": 20,
                 "max_hold_days": 15, "max_new_entries": 2},
         capital_required=150_000,
         max_positions=3,
