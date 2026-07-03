@@ -88,7 +88,20 @@ uv run python scripts/ingest_fyers_quotes.py --symbols NSE:AXISBANK-EQ
 uv run python scripts/ingest_fyers_trading_snapshots.py   # read-only FYERS state only
 uv run python scripts/compute_technical_factors.py --resolution D
 uv run python scripts/run_watchlist_daily_report.py --watchlist watchlists/default.csv --print
+
+# BankNifty daywise trend-pattern library (research/paper-only; deterministic
+# rules + nearest-neighbour similar-day library; no orders)
+uv run python scripts/build_banknifty_trend_pattern_library.py \
+  --from 2025-06-01 --to 2026-06-16 --resolution 5 --print   # add --dry-run to skip writes
+uv run python scripts/generate_banknifty_trend_pattern_report.py --date 2026-06-16 --print
+./scripts/banknifty_trend_pattern_report.sh                  # cron wrapper (NOT scheduled yet)
 ```
+
+Day-pattern notes: classes are `trend|range|spike_channel|trending_range|reversal|chop`;
+all thresholds live in `config/banknifty_trend_patterns.json`; missing option-chain
+context is warned, never guessed; ML/HMM/tree/boosting stay experiment-only roadmap.
+Report "how it could have been played" / "bot lessons" use the runner exit model
+(0.5R breakeven + MFE trailing/ratchet) — never a fixed profit cap.
 
 ## Layout
 

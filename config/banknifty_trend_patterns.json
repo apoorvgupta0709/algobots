@@ -1,0 +1,92 @@
+{
+  "underlying": "BANKNIFTY",
+  "underlying_symbol": "NSE:NIFTYBANK-INDEX",
+  "resolution": "5",
+  "rule_version": "banknifty_trend_patterns_v1",
+  "algorithm": "deterministic_rules",
+  "constituents_config": "config/banknifty_options_paper.json",
+  "session": {
+    "open_ist": "09:15",
+    "close_ist": "15:30",
+    "min_candles_for_classification": 24
+  },
+  "orb": {
+    "window_minutes": 15,
+    "break_buffer_pct": 0.02
+  },
+  "segments": [
+    {"name": "open_drive", "start_ist": "09:15", "end_ist": "10:15"},
+    {"name": "midday", "start_ist": "10:15", "end_ist": "13:30"},
+    {"name": "close", "start_ist": "13:30", "end_ist": "15:30"}
+  ],
+  "vwap": {
+    "cross_min_distance_pct": 0.03,
+    "side_neutral_band_pct": 0.0
+  },
+  "close_location": {
+    "strong_high": 0.75,
+    "strong_low": 0.25
+  },
+  "realized_vol": {
+    "daily_lookback_days": 10,
+    "adr_lookback_days": 10
+  },
+  "breadth": {
+    "confirm_pct": 55.0,
+    "divergence_pct": 55.0,
+    "top_contributors": 3
+  },
+  "classification": {
+    "direction_min_return_pct": 0.20,
+    "trend_min_abs_return_pct": 0.55,
+    "trend_max_vwap_crosses": 4,
+    "trend_min_close_location": 0.72,
+    "trend_min_breadth_confirm_pct": 55.0,
+    "spike_channel_min_open_drive_return_pct": 0.45,
+    "spike_channel_max_pullback_ratio": 0.40,
+    "trending_range_min_abs_return_pct": 0.30,
+    "trending_range_min_vwap_side_pct": 60.0,
+    "range_max_abs_return_pct": 0.35,
+    "range_min_vwap_crosses": 4,
+    "range_close_location_low": 0.30,
+    "range_close_location_high": 0.70,
+    "reversal_min_open_drive_return_pct": 0.30,
+    "reversal_min_reverse_return_pct": 0.30,
+    "chop_max_abs_return_pct": 0.25,
+    "chop_min_vwap_crosses": 5,
+    "chop_max_breadth_confirm_pct": 55.0
+  },
+  "library": {
+    "history_lookback_calendar_days": 30,
+    "include_persisted_similar_days": true
+  },
+  "nearest_neighbor": {
+    "top_k": 5,
+    "min_distance_for_match": 0.0,
+    "feature_weights": {
+      "gap_pct": 0.6,
+      "day_return_pct": 1.4,
+      "day_range_pct": 1.0,
+      "orb_range_pct": 0.8,
+      "close_location": 1.2,
+      "vwap_cross_count": 1.0,
+      "vwap_side_pct": 1.0,
+      "realized_vol": 0.8,
+      "range_vs_adr10": 0.8,
+      "weighted_positive_breadth_pct": 1.0
+    }
+  },
+  "exit_model": {
+    "fixed_target_exit_enabled": false,
+    "profit_lock_trigger": 0,
+    "profit_lock_step": 0,
+    "breakeven_at_r": 0.5,
+    "ratchet_start_r": 1.0,
+    "ratchet_giveback_pct": 30,
+    "ratchet_giveback_min_inr": 300,
+    "description": "Runner-style exits only: after +0.5R move the paper stop to breakeven + one tick / cost proxy, then trail via MFE ratchet / structure trailing. No fixed profit cap."
+  },
+  "paper_only": true,
+  "live_orders_enabled": false,
+  "notes": "BankNifty daywise trend-pattern library. Research/paper-only analytics; classifies sessions into trend|range|spike_channel|trending_range|reversal|chop using deterministic config-driven rules plus a nearest-neighbour similar-day library. No FYERS order placement. ML/HMM/tree/boosting remain experiment-only roadmap; deterministic rules + nearest-neighbour is the sole production path."
+}

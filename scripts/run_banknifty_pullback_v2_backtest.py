@@ -15,7 +15,7 @@ import json
 import math
 import os
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from pathlib import Path
@@ -295,6 +295,8 @@ def simulate_trade(
     rank: str,
     beta: Decimal,
     daily_realized: Decimal,
+    round_trip_cost: Decimal = TRADE_COST_RUPEES,
+    cost_aware_breakeven: bool = True,
 ) -> Trade | None:
     entry = entry_candle.open
     index_distance = abs(entry - index_stop)
@@ -361,6 +363,7 @@ def simulate_trade(
             ratchet_giveback_pct=config.ratchet_giveback_pct,
             ratchet_giveback_min_inr=config.ratchet_giveback_min_inr,
             tick_size=config.option_tick_size,
+            round_trip_cost_inr=round_trip_cost if cost_aware_breakeven else Decimal("0"),
         )
         if fake_stop is not None:
             candidate_lock = ((fake_stop - fake_entry) * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
@@ -374,7 +377,7 @@ def simulate_trade(
             exit_ts, exit_index, exit_reason = c.ts, c.close, "force_intraday_exit"
             break
 
-    pnl = (pnl - TRADE_COST_RUPEES).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+    pnl = (pnl - round_trip_cost).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
     pnl_r = (pnl / risk_rupees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if risk_rupees else Decimal("0")
     mfe_r = (best_pnl / risk_rupees).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if risk_rupees else Decimal("0")
     capture = (pnl / best_pnl * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if best_pnl > 0 and pnl > 0 else Decimal("0")
@@ -402,7 +405,14 @@ def simulate_trade(
     )
 
 
-def run_backtest(config: CampaignConfig, start: date, end: date) -> tuple[list[Trade], dict[str, Any]]:
+def run_backtest(
+    config: CampaignConfig,
+    start: date,
+    end: date,
+    *,
+    round_trip_cost: Decimal = TRADE_COST_RUPEES,
+    cost_aware_breakeven: bool = True,
+) -> tuple[list[Trade], dict[str, Any]]:
     symbols = [config.underlying_symbol] + [c.fyers_symbol for c in config.constituents]
     weights = {c.fyers_symbol: (c.weight or Decimal("0")) for c in config.constituents}
     with connect_db() as conn:
@@ -505,6 +515,8 @@ def run_backtest(config: CampaignConfig, start: date, end: date) -> tuple[list[T
                     rank=rank,
                     beta=beta,
                     daily_realized=daily_realized,
+                    round_trip_cost=round_trip_cost,
+                    cost_aware_breakeven=cost_aware_breakeven,
                 )
                 if trade is not None:
                     break
@@ -527,6 +539,14 @@ def run_backtest(config: CampaignConfig, start: date, end: date) -> tuple[list[T
         "trading_days": len(dates),
         "no_trade_days": no_trade_days,
         "rejection_counts": dict(sorted(rejection_counts.items(), key=lambda kv: kv[1], reverse=True)[:12]),
+        "exit_params": {
+            "breakeven_at_r": str(config.breakeven_at_r),
+            "ratchet_start_r": str(config.ratchet_start_r),
+            "ratchet_giveback_pct": str(config.ratchet_giveback_pct),
+            "ratchet_giveback_min_inr": str(config.ratchet_giveback_min_inr),
+            "round_trip_cost_inr": str(round_trip_cost),
+            "cost_aware_breakeven": cost_aware_breakeven,
+        },
     }
     return trades, meta
 
@@ -571,11 +591,12 @@ def summarize(trades: list[Trade], meta: dict[str, Any], *, max_daily_loss: Deci
     }
 
 
-def write_outputs(trades: list[Trade], summary: dict[str, Any]) -> tuple[Path, Path]:
+def write_outputs(trades: list[Trade], summary: dict[str, Any], *, experimental: bool = False) -> tuple[Path, Path]:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
-    csv_path = REPORT_DIR / f"banknifty_pullback_v2_proxy_trades_{stamp}.csv"
-    md_path = REPORT_DIR / f"banknifty_pullback_v2_proxy_backtest_{stamp}.md"
+    tag = "experimental_" if experimental else ""
+    csv_path = REPORT_DIR / f"banknifty_pullback_v2_proxy_{tag}trades_{stamp}.csv"
+    md_path = REPORT_DIR / f"banknifty_pullback_v2_proxy_{tag}backtest_{stamp}.md"
     with csv_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=[
             "day", "direction", "entry_ts", "exit_ts", "entry_index", "exit_index", "reference_level", "index_stop", "beta", "strike_rank", "lots", "quantity", "risk_rupees", "pnl_rupees", "pnl_r", "mfe_rupees", "mfe_r", "capture_pct", "exit_reason", "minutes_open",
@@ -583,16 +604,40 @@ def write_outputs(trades: list[Trade], summary: dict[str, Any]) -> tuple[Path, P
         writer.writeheader()
         for t in trades:
             writer.writerow({k: getattr(t, k) for k in writer.fieldnames})
+    ep = summary.get("exit_params", {})
     lines = [
-        "# BankNifty Pullback Continuation v2 — Proxy Backtest",
+        "# BankNifty Pullback Continuation v2 — Proxy Backtest"
+        + (" (EXPERIMENTAL exit-sweep — NOT promoted to active config)" if experimental else ""),
         "",
         "Research-only; no orders placed.",
         "",
+    ]
+    if experimental:
+        lines += [
+            "> **EXPERIMENTAL**: this run overrides exit parameters and/or cost-aware "
+            "breakeven for research. Parameters here are NOT promoted to the active "
+            "config and must clear the acceptance gates below before any promotion.",
+            "",
+        ]
+    if ep:
+        lines += [
+            "## Exit parameters used",
+            "",
+            f"- breakeven_at_r: {ep.get('breakeven_at_r')}",
+            f"- ratchet_start_r: {ep.get('ratchet_start_r')}",
+            f"- ratchet_giveback_pct: {ep.get('ratchet_giveback_pct')}",
+            f"- ratchet_giveback_min_inr: {ep.get('ratchet_giveback_min_inr')}",
+            f"- round_trip_cost_inr: {ep.get('round_trip_cost_inr')}",
+            f"- cost_aware_breakeven: {ep.get('cost_aware_breakeven')}",
+            "",
+        ]
+    cost_used = ep.get("round_trip_cost_inr", str(TRADE_COST_RUPEES)) if ep else str(TRADE_COST_RUPEES)
+    lines += [
         "## Data caveat",
         "",
         "Stored 1-min/5-min BankNifty index and constituent candles were used. Historical expired BankNifty option-chain candles are not available in the current FYERS master, so the option leg is simulated with the configured index-to-option beta risk model. Treat this as signal/risk validation, not final option-candle acceptance.",
         "",
-        f"Cost model: \u20b9{TRADE_COST_RUPEES} round-trip per trade (brokerage + slippage), subtracted from every trade.",
+        f"Cost model: \u20b9{cost_used} round-trip per trade (brokerage + slippage), subtracted from every trade; breakeven/ratchet lock is cost-aware unless --legacy-gross-breakeven is set.",
         "",
         "## Summary",
     ]
@@ -633,18 +678,80 @@ def write_outputs(trades: list[Trade], summary: dict[str, Any]) -> tuple[Path, P
     return md_path, csv_path
 
 
+def validate_experimental_inputs(
+    *,
+    breakeven_at_r: Decimal | None,
+    ratchet_start_r: Decimal | None,
+    ratchet_giveback_pct: Decimal | None,
+    ratchet_giveback_min_inr: Decimal | None,
+    round_trip_cost: Decimal,
+) -> None:
+    """Reject non-sensible experimental exit-sweep inputs before backtests run."""
+    if round_trip_cost < 0:
+        raise SystemExit(
+            "Refusing: --round-trip-cost must be >= 0 "
+            "(a negative cost would add fake profit to every trade)"
+        )
+    if breakeven_at_r is not None and breakeven_at_r <= 0:
+        raise SystemExit("Refusing: --breakeven-at-r must be > 0 when provided")
+    if ratchet_start_r is not None and ratchet_start_r <= 0:
+        raise SystemExit("Refusing: --ratchet-start-r must be > 0 when provided")
+    if ratchet_giveback_pct is not None and ratchet_giveback_pct <= 0:
+        raise SystemExit("Refusing: --ratchet-giveback-pct must be > 0 when provided")
+    if ratchet_giveback_min_inr is not None and ratchet_giveback_min_inr < 0:
+        raise SystemExit("Refusing: --ratchet-giveback-min-inr must be >= 0 when provided")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backtest BankNifty pullback_continuation_v2 using stored candles; research-only.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--from", dest="start", required=True)
     parser.add_argument("--to", dest="end", required=True)
+    # Experimental exit-sweep overrides. These NEVER touch the active config file:
+    # they replace exit fields on an in-memory config copy and tag the report
+    # "experimental". Promote to config only after acceptance gates pass.
+    parser.add_argument("--breakeven-at-r", type=Decimal, default=None, help="Experimental: override exits.breakeven_at_r")
+    parser.add_argument("--ratchet-start-r", type=Decimal, default=None, help="Experimental: arm the MFE ratchet earlier/later than active config")
+    parser.add_argument("--ratchet-giveback-pct", type=Decimal, default=None, help="Experimental: override exits.ratchet_giveback_pct")
+    parser.add_argument("--ratchet-giveback-min-inr", type=Decimal, default=None, help="Experimental: override exits.ratchet_giveback_min_inr")
+    parser.add_argument("--round-trip-cost", type=Decimal, default=TRADE_COST_RUPEES, help=f"Round-trip cost per trade in INR (default {TRADE_COST_RUPEES})")
+    parser.add_argument("--legacy-gross-breakeven", action="store_true", help="Disable cost-aware breakeven (lock gross-flat, the pre-fix behavior)")
     args = parser.parse_args()
     config = load_config(args.config)
     if not config.paper_only or config.live_orders_enabled:
         raise SystemExit("Refusing: config must be paper_only true and live_orders_enabled false")
-    trades, meta = run_backtest(config, date.fromisoformat(args.start), date.fromisoformat(args.end))
+
+    validate_experimental_inputs(
+        breakeven_at_r=args.breakeven_at_r,
+        ratchet_start_r=args.ratchet_start_r,
+        ratchet_giveback_pct=args.ratchet_giveback_pct,
+        ratchet_giveback_min_inr=args.ratchet_giveback_min_inr,
+        round_trip_cost=args.round_trip_cost,
+    )
+
+    overrides: dict[str, Decimal] = {}
+    if args.breakeven_at_r is not None:
+        overrides["breakeven_at_r"] = args.breakeven_at_r
+    if args.ratchet_start_r is not None:
+        overrides["ratchet_start_r"] = args.ratchet_start_r
+    if args.ratchet_giveback_pct is not None:
+        overrides["ratchet_giveback_pct"] = args.ratchet_giveback_pct
+    if args.ratchet_giveback_min_inr is not None:
+        overrides["ratchet_giveback_min_inr"] = args.ratchet_giveback_min_inr
+    if overrides:
+        config = replace(config, **overrides)
+    cost_aware = not args.legacy_gross_breakeven
+    experimental = bool(overrides) or args.round_trip_cost != TRADE_COST_RUPEES or args.legacy_gross_breakeven
+
+    trades, meta = run_backtest(
+        config,
+        date.fromisoformat(args.start),
+        date.fromisoformat(args.end),
+        round_trip_cost=args.round_trip_cost,
+        cost_aware_breakeven=cost_aware,
+    )
     summary = summarize(trades, meta, max_daily_loss=config.max_daily_loss)
-    md_path, csv_path = write_outputs(trades, summary)
+    md_path, csv_path = write_outputs(trades, summary, experimental=experimental)
     print(json.dumps({k: str(v) if isinstance(v, Decimal) else v for k, v in summary.items()}, indent=2, default=str))
     print(f"Report: {md_path}")
     print(f"CSV: {csv_path}")

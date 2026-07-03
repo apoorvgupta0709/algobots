@@ -1414,17 +1414,29 @@ def compute_mfe_ratchet_stop(
     ratchet_giveback_pct: Decimal,
     ratchet_giveback_min_inr: Decimal,
     tick_size: Decimal,
+    round_trip_cost_inr: Decimal = Decimal("0"),
 ) -> Decimal | None:
-    """R-based breakeven + MFE-ratchet trailing stop for long options."""
+    """R-based breakeven + MFE-ratchet trailing stop for long options.
+
+    ``round_trip_cost_inr`` makes the breakeven/ratchet lock *cost-aware*: the
+    locked stop is floored so the net P&L after round-trip brokerage/slippage is
+    non-negative, instead of locking a gross-flat stop that still nets a loss once
+    costs are subtracted at exit. Defaults to ``0`` so the live paper monitor path
+    is byte-for-byte unchanged; research/backtest paths opt in by passing the cost.
+    """
     if entry_premium <= 0 or quantity <= 0 or risk_rupees <= 0:
         return None
     mfe = (highest_premium - entry_premium) * Decimal(quantity)
     if mfe < risk_rupees * breakeven_at_r:
         return None
-    locked_pnl = tick_size * Decimal(quantity)  # breakeven + one tick as cost proxy
+    # Breakeven floor: at least one tick (gross-flat proxy) and at least the
+    # round-trip cost so a "breakeven" lock nets >= 0 after costs, not gross-flat.
+    locked_pnl = max(tick_size * Decimal(quantity), round_trip_cost_inr)
     if mfe >= risk_rupees * ratchet_start_r:
         giveback = max(ratchet_giveback_min_inr, mfe * ratchet_giveback_pct / Decimal("100"))
         locked_pnl = max(locked_pnl, mfe - giveback)
+    # Never lock a stop above the captured MFE (a thin MFE can be below the cost floor).
+    locked_pnl = min(locked_pnl, mfe)
     return floor_to_tick(entry_premium + (locked_pnl / Decimal(quantity)), tick_size)
 
 
@@ -1848,6 +1860,92 @@ def insert_event(cur: psycopg.Cursor, trade_id: int, event_type: str, premium: D
     )
 
 
+def _insert_no_entry_decision(
+    cur: psycopg.Cursor,
+    config: CampaignConfig,
+    now_local: datetime,
+    *,
+    mode: str,
+    blocker: str,
+    reason: str,
+    metrics: dict[str, Any] | None,
+    raw: dict[str, Any] | None,
+    campaign: Campaign | None,
+) -> None:
+    """Append one no-entry audit row on ``cur`` (append-only, never deduped)."""
+    camp = campaign or current_campaign(cur, config)
+    cur.execute(
+        """
+        insert into research.option_paper_no_entry_decisions
+            (campaign_id, trade_date, decision_time, decision_minute, mode, blocker, reason, metrics, raw)
+        values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+        """,
+        (
+            camp.campaign_id,
+            now_local.date(),
+            now_local,
+            now_local.replace(second=0, microsecond=0),
+            mode,
+            blocker,
+            reason,
+            json_dumps_safe(metrics or {}),
+            json_dumps_safe(raw or {}),
+        ),
+    )
+
+
+def record_no_entry_decision(
+    config: CampaignConfig,
+    *,
+    mode: str,
+    blocker: str,
+    reason: str,
+    metrics: dict[str, Any] | None = None,
+    raw: dict[str, Any] | None = None,
+    campaign: Campaign | None = None,
+    cur: psycopg.Cursor | None = None,
+) -> None:
+    """Best-effort persist of one no-entry tick decision for later audit.
+
+    Paper/research only — appends one row to
+    research.option_paper_no_entry_decisions. This is intentionally silent and
+    failure-tolerant: it must never break the scan/tick path or surface noise on
+    a normal no-trade tick. The table is append-only: every call inserts a new
+    row so each no-entry tick stays independently auditable. Two ticks in the
+    same minute with the same blocker are two rows, never collapsed into one, so
+    the daily report counts every tick.
+
+    When ``cur`` is supplied the insert runs inside the caller's open
+    transaction. This matters on the first-run scan/tick path: if
+    ``current_campaign`` auto-created the campaign on that same cursor, the row
+    is not yet committed, so a separate connection's FK insert could not see it
+    and the first no-entry decision would be silently dropped. Writing on the
+    caller's cursor keeps the campaign and its audit row in one transaction. A
+    savepoint guards the caller's transaction so a failed audit insert can never
+    poison it. Callers without a cursor (tick non-boundary, pre-DB gates) keep
+    the best-effort separate-connection behavior.
+    """
+    try:
+        now_local = now_ist()
+        fields = dict(mode=mode, blocker=blocker, reason=reason, metrics=metrics, raw=raw, campaign=campaign)
+        if cur is not None:
+            conn = getattr(cur, "connection", None)
+            if conn is not None and hasattr(conn, "transaction"):
+                # Savepoint: a failed audit insert rolls back to here, leaving
+                # any auto-created campaign on the caller's transaction intact.
+                with conn.transaction():
+                    _insert_no_entry_decision(cur, config, now_local, **fields)
+            else:
+                _insert_no_entry_decision(cur, config, now_local, **fields)
+            return
+        with connect_db() as conn:
+            with conn.cursor() as own_cur:
+                _insert_no_entry_decision(own_cur, config, now_local, **fields)
+    except Exception:
+        # Audit logging is best-effort; never let it break the paper scan/tick path.
+        return
+
+
 def now_ist() -> datetime:
     return datetime.now(IST)
 
@@ -2067,6 +2165,34 @@ def get_day_range_and_adr10(cur: psycopg.Cursor, symbol: str, *, resolution: str
     )
     adr_row = cur.fetchone()
     return day_high, day_low, decimal_or_none(adr_row[0] if adr_row else None)
+
+
+def get_missing_constituent_candle_coverage(
+    cur: psycopg.Cursor,
+    constituents: tuple[BankNiftyConstituent, ...],
+    *,
+    resolution: str = "5",
+) -> list[BankNiftyConstituent]:
+    """Return constituents with no intraday candle rows in ``market.candles`` today.
+
+    Read-only coverage check used by the candle-coverage report so a missing
+    constituent candle feed is surfaced explicitly rather than silently skewing
+    breadth/structure logic. A constituent counts as covered once it has at least
+    one row for the given resolution on the current IST trading date.
+    """
+    if not constituents:
+        return []
+    symbols = [c.fyers_symbol for c in constituents]
+    cur.execute(
+        """
+        select distinct symbol
+        from market.candles
+        where symbol = any(%s) and resolution=%s and ts::date = current_date
+        """,
+        (symbols, resolution),
+    )
+    covered = {row[0] for row in cur.fetchall()}
+    return [c for c in constituents if c.fyers_symbol not in covered]
 
 
 def confluence_levels_from_candles(candles: list[dict[str, Any]], *, direction: str, structure_lookback: int = 8) -> list[Decimal]:
@@ -2555,42 +2681,116 @@ def evaluate_constituent_led_direction(
     return DirectionSignal(None, reason, raw)
 
 
-def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_change: bool = False, dry_run: bool = False) -> list[str]:
+def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_change: bool = False, dry_run: bool = False, run_context: str = "scan") -> list[str]:
     lines = ["## BankNifty Options Paper Scan", "Safety: paper only — no FYERS orders placed.", ""]
+    audit_cur: psycopg.Cursor | None = None
+
+    def no_trade(
+        blocker: str,
+        extra_lines: list[str],
+        *,
+        reason: str | None = None,
+        metrics: dict[str, Any] | None = None,
+        raw: dict[str, Any] | None = None,
+        campaign: Campaign | None = None,
+    ) -> list[str]:
+        # Persist the top gate decision for audit even when the cron is quiet, then
+        # return the display lines (silent on no-change ticks, verbose otherwise).
+        # Gates inside a DB block use that open cursor so the audit row lands in
+        # the same transaction as any just-auto-created campaign.
+        record_no_entry_decision(
+            config,
+            mode=run_context,
+            blocker=blocker,
+            reason=reason if reason is not None else " ".join(str(part) for part in extra_lines),
+            metrics=metrics,
+            raw=raw,
+            campaign=campaign,
+            cur=audit_cur,
+        )
+        return [] if quiet_no_change else lines + extra_lines
+
     strategy_card = selected_constituent_led_strategy(config)
     if strategy_card is None:
         message = "No trade: no enabled paper-safe entry strategy is runnable in the strategy router."
-        return [] if quiet_no_change else lines + [message]
+        return no_trade("no_strategy", [message])
     refresh_warnings: list[str] = []
     if refresh:
         warning = safe_refresh_quotes([config.underlying_symbol, *[c.fyers_symbol for c in config.constituents]])
         if warning:
             refresh_warnings.append(warning)
         if config.index_structure_confirmation_enabled or config.realistic_risk_enabled:
-            warning = safe_refresh_today_history([config.underlying_symbol], resolution=config.structure_candle_resolution)
+            # Refresh constituent candles alongside the index so per-constituent
+            # structure/breadth checks see the same intraday coverage that quotes do.
+            warning = safe_refresh_today_history(
+                [config.underlying_symbol, *[c.fyers_symbol for c in config.constituents]],
+                resolution=config.structure_candle_resolution,
+            )
             if warning:
                 refresh_warnings.append(warning)
     with connect_db() as conn:
         with conn.cursor() as cur:
+            audit_cur = cur
             campaign = current_campaign(cur, config)
             if control_state_paused(cur):
-                return [] if quiet_no_change else lines + ["Engine paused via dashboard control plane; no new paper entries (open positions stay managed)."]
+                return no_trade(
+                    "engine_paused",
+                    ["Engine paused via dashboard control plane; no new paper entries (open positions stay managed)."],
+                    campaign=campaign,
+                )
             open_count, trades_today, realized_today = trade_counts(cur, campaign)
             now_local = now_ist()
+            count_metrics = {"open_count": open_count, "trades_today": trades_today, "realized_today": str(realized_today)}
             if now_local.time() < config.no_new_trades_before.replace(tzinfo=None):
-                return [] if quiet_no_change else lines + [f"No new trades before {config.no_new_trades_before.strftime('%H:%M')} IST; ORB must form first."]
+                return no_trade(
+                    "before_window",
+                    [f"No new trades before {config.no_new_trades_before.strftime('%H:%M')} IST; ORB must form first."],
+                    metrics=count_metrics,
+                    campaign=campaign,
+                )
             if now_local.time() >= config.no_new_trades_after.replace(tzinfo=None):
-                return [] if quiet_no_change else lines + [f"No new trades after {config.no_new_trades_after.strftime('%H:%M')} IST."]
+                return no_trade(
+                    "after_window",
+                    [f"No new trades after {config.no_new_trades_after.strftime('%H:%M')} IST."],
+                    metrics=count_metrics,
+                    campaign=campaign,
+                )
             if open_count >= campaign.max_open_positions:
-                return [] if quiet_no_change else lines + ["Open position already active; scanner will not add another."]
+                return no_trade(
+                    "max_open_positions",
+                    ["Open position already active; scanner will not add another."],
+                    metrics=count_metrics,
+                    campaign=campaign,
+                )
             if trades_today >= campaign.max_trades_per_day:
-                return [] if quiet_no_change else lines + [f"Daily trade cap reached: {trades_today}/{campaign.max_trades_per_day}."]
+                return no_trade(
+                    "daily_trade_cap",
+                    [f"Daily trade cap reached: {trades_today}/{campaign.max_trades_per_day}."],
+                    metrics=count_metrics,
+                    campaign=campaign,
+                )
             if realized_today <= -campaign.max_daily_loss:
-                return lines + [f"Daily paper loss lockout active: {money(realized_today)} <= -{money(campaign.max_daily_loss)}."]
+                lockout_line = f"Daily paper loss lockout active: {money(realized_today)} <= -{money(campaign.max_daily_loss)}."
+                # Loss lockout is intentionally not silenced by quiet_no_change; still persist it.
+                record_no_entry_decision(
+                    config,
+                    mode=run_context,
+                    blocker="daily_loss_lockout",
+                    reason=lockout_line,
+                    metrics=count_metrics,
+                    campaign=campaign,
+                    cur=cur,
+                )
+                return lines + [lockout_line]
             underlying_ltp, underlying_meta, stale = get_quote(cur, config.underlying_symbol, config.quote_stale_seconds)
             if underlying_ltp is None or stale:
                 message = f"BankNifty quote missing/stale for {config.underlying_symbol}; token/quote refresh needed."
-                return [] if quiet_no_change else lines + [message]
+                return no_trade(
+                    "quote_stale",
+                    [message],
+                    metrics={**count_metrics, "underlying_symbol": config.underlying_symbol, "quote_stale": True, "underlying_ltp": str(underlying_ltp) if underlying_ltp is not None else None},
+                    campaign=campaign,
+                )
             moves, missing = get_constituent_moves(cur, config.constituents, config.quote_stale_seconds)
             signal = evaluate_constituent_led_direction(
                 underlying_ltp=underlying_ltp,
@@ -2600,7 +2800,13 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                 config=config,
             )
             if signal.direction is None:
-                return [] if quiet_no_change else lines + [signal.reason]
+                return no_trade(
+                    "direction_unconfirmed",
+                    [signal.reason],
+                    reason=signal.reason,
+                    metrics={**count_metrics, "signal_raw": signal.raw, "missing_constituents": missing},
+                    campaign=campaign,
+                )
             direction = signal.direction
             vwap_volume_decision: ConfirmationDecision | None = None
             if config.vwap_volume_confirmation_enabled:
@@ -2611,14 +2817,26 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     rel_volume_threshold=config.relative_volume_threshold,
                 )
                 if not vwap_volume_decision.allowed:
-                    return [] if quiet_no_change else lines + [signal.reason, *vwap_volume_decision.reasons]
+                    return no_trade(
+                        "vwap_volume",
+                        [signal.reason, *vwap_volume_decision.reasons],
+                        reason=" ".join(vwap_volume_decision.reasons),
+                        metrics={"direction": direction, "guard_raw": vwap_volume_decision.raw},
+                        campaign=campaign,
+                    )
             weighted_vwap_decision = evaluate_weighted_vwap_side(
                 moves,
                 direction=direction,
                 min_side_pct=config.weighted_vwap_side_pct,
             )
             if not weighted_vwap_decision.allowed:
-                return [] if quiet_no_change else lines + [signal.reason, *weighted_vwap_decision.reasons]
+                return no_trade(
+                    "weighted_vwap",
+                    [signal.reason, *weighted_vwap_decision.reasons],
+                    reason=" ".join(weighted_vwap_decision.reasons),
+                    metrics={"direction": direction, "guard_raw": weighted_vwap_decision.raw},
+                    campaign=campaign,
+                )
             index_rel_volume = get_relative_volume(cur, config.underlying_symbol, int_or_none(quote_raw_value(underlying_meta, "volume", "vol_traded_today")))
             day_high, day_low, adr10 = get_day_range_and_adr10(cur, config.underlying_symbol, resolution=config.structure_candle_resolution)
             lunch_decision = evaluate_lunch_chop_guard(
@@ -2633,7 +2851,20 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                 min_relvol=config.lunch_min_relvol,
             )
             if not lunch_decision.allowed:
-                return [] if quiet_no_change else lines + [signal.reason, *lunch_decision.reasons]
+                return no_trade(
+                    "lunch_chop_guard",
+                    [signal.reason, *lunch_decision.reasons],
+                    reason=" ".join(lunch_decision.reasons),
+                    metrics={
+                        "direction": direction,
+                        "index_rel_volume": None if index_rel_volume is None else str(index_rel_volume),
+                        "day_high": None if day_high is None else str(day_high),
+                        "day_low": None if day_low is None else str(day_low),
+                        "adr10": None if adr10 is None else str(adr10),
+                        "guard_raw": lunch_decision.raw,
+                    },
+                    campaign=campaign,
+                )
             index_structure: IndexStructureSignal | None = None
             chop_decision: ConfirmationDecision | None = None
             if config.index_structure_confirmation_enabled:
@@ -2650,7 +2881,13 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     max_vwap_crosses=config.chop_max_vwap_crosses,
                 )
                 if not chop_decision.allowed:
-                    return [] if quiet_no_change else lines + [signal.reason, chop_decision.reasons[0]]
+                    return no_trade(
+                        "chop_regime_guard",
+                        [signal.reason, chop_decision.reasons[0]],
+                        reason=chop_decision.reasons[0],
+                        metrics={"direction": direction, "guard_raw": chop_decision.raw},
+                        campaign=campaign,
+                    )
                 confluence_levels = confluence_levels_from_candles(
                     index_candles,
                     direction=direction,
@@ -2667,7 +2904,13 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     max_pullback_candles=config.pullback_max_candles,
                 )
                 if not index_structure.confirmed:
-                    return [] if quiet_no_change else lines + [signal.reason, index_structure.reason]
+                    return no_trade(
+                        "index_structure_unconfirmed",
+                        [signal.reason, index_structure.reason],
+                        reason=index_structure.reason,
+                        metrics={"direction": direction, "structure_raw": index_structure.raw},
+                        campaign=campaign,
+                    )
                 if index_structure.reference_level is not None:
                     cur.execute(
                         """
@@ -2686,7 +2929,19 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                         trade_ref = decimal_or_none(((raw_trade.get("index_structure") or {}) if isinstance(raw_trade.get("index_structure"), dict) else {}).get("reference_level"))
                         trade_risk = decimal_or_none(((raw_trade.get("realistic_risk_plan") or {}) if isinstance(raw_trade.get("realistic_risk_plan"), dict) else {}).get("risk_rupees")) or config.max_trade_loss
                         if trade_ref is not None and (trade_ref - index_structure.reference_level).copy_abs() <= Decimal("1") and decimal_or_none(realized) is not None and decimal_or_none(realized) <= -trade_risk * Decimal("0.95"):
-                            return [] if quiet_no_change else lines + [signal.reason, f"No trade: broken level {index_structure.reference_level} is burned for today after prior full -1R {direction} stop."]
+                            burned = f"No trade: broken level {index_structure.reference_level} is burned for today after prior full -1R {direction} stop."
+                            return no_trade(
+                                "burned_structure_level",
+                                [signal.reason, burned],
+                                reason=burned,
+                                metrics={
+                                    "direction": direction,
+                                    "reference_level": str(index_structure.reference_level),
+                                    "trade_ref": str(trade_ref),
+                                    "trade_risk": str(trade_risk),
+                                },
+                                campaign=campaign,
+                            )
             jump_reasons = [
                 reason
                 for reason in (
@@ -2719,7 +2974,12 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                 contracts = active
             candidates = select_directional_contract_candidates(contracts, direction=direction, underlying_ltp=underlying_ltp, today=now_local.date(), strike_step=config.strike_step)
             if not candidates:
-                return [] if quiet_no_change else lines + [f"No trade: no ATM/first-OTM {direction} contract available around BankNifty {underlying_ltp}."]
+                return no_trade(
+                    "option_contract_unavailable",
+                    [f"No trade: no ATM/first-OTM {direction} contract available around BankNifty {underlying_ltp}."],
+                    metrics={"direction": direction, "underlying_ltp": str(underlying_ltp), "contracts_available": len(contracts)},
+                    campaign=campaign,
+                )
             contract = candidates[0]
     # Refresh selected option quotes outside the previous transaction so the new quotes are visible freshly.
     if refresh:
@@ -2732,6 +2992,7 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                 refresh_warnings.append(warning)
     with connect_db() as conn:
         with conn.cursor() as cur:
+            audit_cur = cur
             campaign = current_campaign(cur, config)
             selected_state: dict[str, Any] | None = None
             rejection_reasons: list[str] = []
@@ -2759,9 +3020,14 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                         direction=direction, summary=chain_summary, cfg=config.chain_signals
                     )
                     if not chain_signal_decision.allowed:
-                        return [] if quiet_no_change else lines + [
-                            "No trade: option-chain signal gate vetoed entry: " + "; ".join(chain_signal_decision.reasons)
-                        ]
+                        veto = "No trade: option-chain signal gate vetoed entry: " + "; ".join(chain_signal_decision.reasons)
+                        return no_trade(
+                            "option_chain_veto",
+                            [veto],
+                            reason=veto,
+                            metrics={"direction": direction, "chain_raw": chain_signal_decision.raw},
+                            campaign=campaign,
+                        )
             for candidate in candidates:
                 option_ltp, option_meta, option_stale = get_quote(cur, candidate.symbol, config.quote_stale_seconds)
                 if option_ltp is None or option_stale:
@@ -2847,7 +3113,14 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                 }
                 break
             if selected_state is None:
-                return [] if quiet_no_change else lines + ["No trade: ATM and first-OTM candidates rejected: " + "; ".join(rejection_reasons)]
+                reason_text = "No trade: ATM and first-OTM candidates rejected: " + "; ".join(rejection_reasons)
+                return no_trade(
+                    "option_candidate_rejected",
+                    [reason_text],
+                    reason=reason_text,
+                    metrics={"direction": direction, "rejection_reasons": rejection_reasons},
+                    campaign=campaign,
+                )
             option_ltp = selected_state["option_ltp"]
             option_meta = selected_state["option_meta"]
             risk_decision = selected_state["risk_decision"]
@@ -3366,6 +3639,115 @@ def snapshot_report(config: CampaignConfig, *, output: Path | None = None, print
     return lines
 
 
+def no_trade_report(config: CampaignConfig, *, trade_date: date | None = None) -> list[str]:
+    """Daily no-entry summary from persisted quiet-scan decisions."""
+    report_date = trade_date or now_ist().date()
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            campaign = current_campaign(cur, config)
+            cur.execute(
+                """
+                select blocker, count(*) as ticks, min(decision_time), max(decision_time)
+                from research.option_paper_no_entry_decisions
+                where campaign_id=%s and trade_date=%s
+                group by blocker
+                order by ticks desc, blocker
+                """,
+                (campaign.campaign_id, report_date),
+            )
+            counts = cur.fetchall()
+            cur.execute(
+                """
+                select decision_time, blocker, reason
+                from research.option_paper_no_entry_decisions
+                where campaign_id=%s and trade_date=%s
+                order by decision_time asc, decision_id asc
+                limit 1
+                """,
+                (campaign.campaign_id, report_date),
+            )
+            first = cur.fetchone()
+            cur.execute(
+                """
+                select decision_time, blocker, reason
+                from research.option_paper_no_entry_decisions
+                where campaign_id=%s and trade_date=%s
+                order by decision_time desc, decision_id desc
+                limit 1
+                """,
+                (campaign.campaign_id, report_date),
+            )
+            latest = cur.fetchone()
+    total = sum(int(row[1] or 0) for row in counts)
+    lines = [
+        "## BankNifty No-Trade Decision Report",
+        "Safety: paper-only audit report — no live orders placed.",
+        "",
+        f"Campaign: {config.campaign_name}",
+        f"Date: {report_date.isoformat()}",
+        f"Persisted no-entry ticks: {total}",
+    ]
+    if not counts:
+        lines.append("No no-entry decisions were logged for this date.")
+        return lines
+
+    def _decision_line(prefix: str, row: tuple[Any, ...] | None) -> str:
+        if not row:
+            return f"{prefix}: n/a"
+        when, blocker, reason = row
+        when_text = when.isoformat() if hasattr(when, "isoformat") else str(when)
+        return f"{prefix}: {when_text} — {blocker}: {reason}"
+
+    lines += [
+        "",
+        _decision_line("First blocker", first),
+        _decision_line("Latest blocker", latest),
+        "",
+        "Counts by blocker:",
+    ]
+    for blocker, ticks, first_seen, latest_seen in counts:
+        first_text = first_seen.isoformat() if hasattr(first_seen, "isoformat") else str(first_seen)
+        latest_text = latest_seen.isoformat() if hasattr(latest_seen, "isoformat") else str(latest_seen)
+        lines.append(f"- {blocker}: {int(ticks)} tick(s), first {first_text}, latest {latest_text}")
+    return lines
+
+
+def candle_coverage_report(config: CampaignConfig) -> list[str]:
+    """Read-only report of constituent 5-minute candle coverage for today."""
+    resolution = config.structure_candle_resolution
+    total = len(config.constituents)
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            missing = get_missing_constituent_candle_coverage(cur, config.constituents, resolution=resolution)
+    missing_symbols = {c.fyers_symbol for c in missing}
+    covered = total - len(missing)
+    lines = [
+        "## BankNifty Constituent Candle Coverage Report",
+        "Safety: read-only coverage check — no live orders placed.",
+        "",
+        f"Campaign: {config.campaign_name}",
+        f"Date: {now_ist().date().isoformat()}",
+        f"Resolution: {resolution}-minute",
+        f"Constituents covered: {covered}/{total}",
+        "",
+    ]
+    if not config.constituents:
+        lines.append("No constituents configured.")
+        return lines
+    for constituent in config.constituents:
+        status = "MISSING" if constituent.fyers_symbol in missing_symbols else "ok"
+        lines.append(f"- {constituent.symbol} ({constituent.fyers_symbol}): {status}")
+    if missing:
+        lines += [
+            "",
+            f"Missing today's {resolution}-minute candles: "
+            + ", ".join(c.fyers_symbol for c in missing),
+        ]
+    else:
+        lines += ["", "All constituents have today's candle coverage."]
+    return lines
+
+
 def init_campaign(config: CampaignConfig) -> list[str]:
     apply_migrations()
     with connect_db() as conn:
@@ -3407,8 +3789,25 @@ def tick(config: CampaignConfig, *, refresh: bool = True, quiet_no_change: bool 
     )
     if not open_trade_exists:
         if not should_run_entry_scan(tick_started_ist, config.entry_scan_interval_minutes):
+            # Off the entry-scan minute boundary: persist a best-effort audit row so
+            # the daily report can account for every no-entry tick, then stay silent
+            # (do not run a full scan or monitor pass, keep quiet cron output unchanged).
+            record_no_entry_decision(
+                config,
+                mode="tick",
+                blocker="entry_scan_interval_wait",
+                reason=(
+                    f"Off entry-scan boundary: minute {tick_started_ist.minute} not a multiple of "
+                    f"{config.entry_scan_interval_minutes}; waiting for next scan boundary."
+                ),
+                metrics={
+                    "entry_scan_interval_minutes": config.entry_scan_interval_minutes,
+                    "tick_minute": tick_started_ist.minute,
+                    "tick_time": tick_started_ist.strftime("%H:%M:%S"),
+                },
+            )
             return emitted
-        scan_lines = scan_for_entry(config, refresh=refresh, quiet_no_change=quiet_no_change)
+        scan_lines = scan_for_entry(config, refresh=refresh, quiet_no_change=quiet_no_change, run_context="tick")
         if scan_lines:
             emitted.extend(scan_lines)
         open_trade_exists = has_open_option_trade(config)
@@ -3433,11 +3832,12 @@ def tick(config: CampaignConfig, *, refresh: bool = True, quiet_no_change: bool 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    parser.add_argument("--mode", choices=["init", "refresh-contracts", "scan", "monitor", "tick", "report"], required=True)
+    parser.add_argument("--mode", choices=["init", "refresh-contracts", "scan", "monitor", "tick", "report", "no-trade-report", "candle-coverage-report"], required=True)
     parser.add_argument("--refresh-quotes", action="store_true", help="Read-only FYERS quote refresh before evaluating.")
     parser.add_argument("--quiet-no-change", action="store_true", help="Print nothing if no action occurred.")
     parser.add_argument("--dry-run", action="store_true", help="For scan mode, evaluate candidate without inserting a paper trade.")
     parser.add_argument("--loop-seconds", type=int, default=55, help="For tick mode, keep polling within this many seconds.")
+    parser.add_argument("--date", help="For no-trade-report mode, IST trade date YYYY-MM-DD (default: today).")
     args = parser.parse_args()
     config = load_config(args.config)
     if args.mode == "init":
@@ -3450,6 +3850,11 @@ def main() -> None:
         lines = monitor_open_options(config, refresh=args.refresh_quotes, quiet_no_change=args.quiet_no_change)
     elif args.mode == "tick":
         lines = tick(config, refresh=args.refresh_quotes, quiet_no_change=args.quiet_no_change, loop_seconds=args.loop_seconds)
+    elif args.mode == "no-trade-report":
+        report_date = date.fromisoformat(args.date) if args.date else None
+        lines = no_trade_report(config, trade_date=report_date)
+    elif args.mode == "candle-coverage-report":
+        lines = candle_coverage_report(config)
     else:
         output = PROJECT_ROOT / "reports" / f"banknifty_options_paper_snapshot_{now_ist().date().isoformat()}.md"
         lines = snapshot_report(config, output=output, print_report=False)
