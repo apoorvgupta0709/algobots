@@ -35,10 +35,16 @@ def _direction(row: PositionRow) -> int:
     For option legs (underlying set) the traded side does not indicate the
     view (long puts are bearish), so direction is inferred from where the
     stop sits relative to the underlying entry; TP is the fallback hint.
+
+    Once the stop has been ratcheted it can cross the entry, so the
+    comparison anchor is the MFE ``trail_anchor`` (which always stays on the
+    favourable side of the stop) when one exists.
     """
     if row.underlying and row.underlying_entry:
-        if row.stop_loss is not None and row.stop_loss != row.underlying_entry:
-            return 1 if row.stop_loss < row.underlying_entry else -1
+        anchor = (row.trail_anchor if row.trail_anchor is not None
+                  else row.underlying_entry)
+        if row.stop_loss is not None and row.stop_loss != anchor:
+            return 1 if row.stop_loss < anchor else -1
         if row.take_profit is not None and row.take_profit != row.underlying_entry:
             return 1 if row.take_profit > row.underlying_entry else -1
     return 1 if row.qty >= 0 else -1
