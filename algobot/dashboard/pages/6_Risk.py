@@ -50,24 +50,24 @@ g1, g2, g3, g4 = st.columns(4)
 with g1:
     st.plotly_chart(_gauge("Day P&L vs cap", risk["realized_day_pnl"],
                            -day_cap, day_cap, -day_cap * 0.999, prefix="₹"),
-                    use_container_width=True)
+                    width="stretch")
     st.caption(f"Daily loss cap {ui.fmt_inr(day_cap)}")
 with g2:
     st.plotly_chart(_gauge("Week P&L vs cap", risk["realized_week_pnl"],
                            -week_cap, week_cap, -week_cap * 0.999, prefix="₹"),
-                    use_container_width=True)
+                    width="stretch")
     st.caption(f"Weekly loss cap {ui.fmt_inr(week_cap)}")
 with g3:
     fig = _gauge("Open positions", risk["open_position_count"], 0, max_pos, 0)
     fig.update_traces(gauge_bar_color=ui.NEG
                       if risk["open_position_count"] >= max_pos else ui.BLUE)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.caption(f"Max concurrent {max_pos}")
 with g4:
     fig = _gauge("Trades today", risk["trades_today"], 0, max_trd, 0)
     fig.update_traces(gauge_bar_color=ui.NEG
                       if risk["trades_today"] >= max_trd else ui.BLUE)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.caption(f"Max per day {max_trd}")
 
 st.divider()
@@ -106,7 +106,7 @@ else:
     show = events[events["level"].isin(levels)] if levels else events
     st.dataframe(
         show[["ts", "level", "source", "message"]],
-        use_container_width=True, hide_index=True, height=380,
+        width="stretch", hide_index=True, height=380,
         column_config={
             "ts": st.column_config.DatetimeColumn("Time (UTC)", format="DD MMM HH:mm:ss"),
             "level": "Level", "source": "Source", "message": "Message",

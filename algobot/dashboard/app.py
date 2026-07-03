@@ -104,7 +104,7 @@ with left:
             hovertemplate="%{x|%d %b %H:%M}<br>₹%{y:,.0f}<extra></extra>"))
         ui.tight_layout(fig, height=340)
         fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with right:
     st.subheader("Today's P&L by strategy")
@@ -124,7 +124,7 @@ with right:
             hovertemplate="%{y}: ₹%{x:,.0f}<extra></extra>"))
         ui.tight_layout(fig, height=340)
         fig.update_layout(hovermode="closest", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 # ------------------------------------------------------------------- recent trades
 st.subheader("Recent trades")
@@ -136,7 +136,7 @@ else:
                    "qty", "entry_price", "exit_price", "net_pnl", "exit_reason"]]
     st.dataframe(
         ui.pnl_styler(show, ["net_pnl"]),
-        use_container_width=True, hide_index=True,
+        width="stretch", hide_index=True,
         column_config={
             "exit_time": st.column_config.DatetimeColumn("Exit", format="DD MMM HH:mm"),
             "strategy_id": "Strategy", "mode": "Mode", "symbol": "Symbol",

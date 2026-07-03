@@ -70,7 +70,7 @@ if not flt.empty:
     fig.add_hline(y=0, line_color=ui.MUTED, line_dash="dot")
     ui.tight_layout(fig, height=260)
     fig.update_layout(showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ---------------------------------------------------------------------- table
 show = flt[["exit_time", "strategy_id", "mode", "symbol", "direction", "qty",
@@ -78,7 +78,7 @@ show = flt[["exit_time", "strategy_id", "mode", "symbol", "direction", "qty",
             "net_pnl", "exit_reason"]]
 st.dataframe(
     ui.pnl_styler(show, ["gross_pnl", "net_pnl"]),
-    use_container_width=True, hide_index=True, height=420,
+    width="stretch", hide_index=True, height=420,
     column_config={
         "exit_time": st.column_config.DatetimeColumn("Exit", format="DD MMM YY HH:mm"),
         "entry_time": st.column_config.DatetimeColumn("Entry", format="DD MMM YY HH:mm"),

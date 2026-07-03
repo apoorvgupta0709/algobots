@@ -31,7 +31,7 @@ table = runs.assign(
 
 st.dataframe(
     ui.pnl_styler(table, ["net_pnl"]),
-    use_container_width=True, hide_index=True,
+    width="stretch", hide_index=True,
     column_config={
         "id": "Run", "strategy_id": "Strategy", "period": "Period",
         "source": "Data source",

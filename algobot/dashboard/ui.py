@@ -156,7 +156,7 @@ def sidebar() -> str | None:
     st.sidebar.selectbox(
         "Mode filter", ["all", "paper", "live"], key="mode_filter",
         help="Applies to positions / trades / P&L views.")
-    if st.sidebar.button("Refresh now", use_container_width=True):
+    if st.sidebar.button("Refresh now", width="stretch"):
         st.cache_data.clear()
         st.rerun()
     st.sidebar.caption(f"Data auto-refreshes every 10 s · IST "

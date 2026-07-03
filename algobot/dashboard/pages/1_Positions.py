@@ -50,5 +50,5 @@ for sid, group in df.groupby("strategy_id", sort=True):
         f"{ui.fmt_inr(sub_unrl, sign=True)}</span>",
         unsafe_allow_html=True)
     st.dataframe(ui.pnl_styler(group[COLS], ["unrealized_pnl"]),
-                 use_container_width=True, hide_index=True,
+                 width="stretch", hide_index=True,
                  column_config=COLUMN_CONFIG)

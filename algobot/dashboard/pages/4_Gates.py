@@ -17,7 +17,7 @@ cfg = gate_config()
 
 top_l, top_r = st.columns([3, 1])
 with top_r:
-    if st.button("Re-evaluate gates", use_container_width=True):
+    if st.button("Re-evaluate gates", width="stretch"):
         ui.show_api_result(*api_client.evaluate_gates())
 with top_l:
     st.caption(

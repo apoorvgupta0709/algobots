@@ -48,7 +48,7 @@ else:
             line=dict(color=ui.SERIES[i % len(ui.SERIES)], width=2),
             hovertemplate="%{x|%d %b %H:%M}<br>₹%{y:,.0f}<extra>" + m + "</extra>"))
     ui.tight_layout(fig, height=320)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ---------------------------------------------------------------- trade stats
 st.subheader("Trade statistics")
@@ -98,7 +98,7 @@ with left:
     ui.tight_layout(fig, height=max(180, 60 + 48 * len(pivot)))
     fig.update_layout(hovermode="closest")
     fig.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ------------------------------------------------------------- P&L histogram
 with right:
@@ -112,4 +112,4 @@ with right:
     ui.tight_layout(fig, height=max(180, 60 + 48 * max(1, len(pivot))))
     fig.update_layout(hovermode="closest", bargap=0.05, showlegend=False)
     fig.update_xaxes(title_text="Net P&L per trade (₹)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
