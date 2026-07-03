@@ -72,26 +72,26 @@ class LongVolEventStrategy(StrategyBase):
 
         # ------------------------------------------------------------- exits
         if ctx.has_open_position:
-            signals: list[Signal] = []
-            for pos in ctx.open_positions:
-                entry_ref = pos.underlying_entry if pos.underlying_entry else pos.avg_price
-                # (a) move captured — exit into the spike, before IV deflates
-                if entry_ref and abs(close - entry_ref) / entry_ref >= p["move_exit_pct"] / 100.0:
-                    signals.append(Signal(
-                        strategy_id=self.strategy_id, signal_type=SignalType.EXIT,
-                        instrument=sym, timestamp=ctx.now, reference_price=close,
-                        reason=f"move captured: {abs(close - entry_ref) / entry_ref * 100:.2f}% "
-                               f">= {p['move_exit_pct']:.1f}%"))
-                    continue
-                # (b) time stop — the event fizzled; never hold a full loser
-                opened_date = pos.opened_at.date()
-                sessions_held = int(sum(1 for ts in df.index[-40:] if ts.date() > opened_date))
-                if sessions_held > p["max_hold_days"]:
-                    signals.append(Signal(
-                        strategy_id=self.strategy_id, signal_type=SignalType.EXIT,
-                        instrument=sym, timestamp=ctx.now, reference_price=close,
-                        reason=f"time stop: {sessions_held} sessions > {p['max_hold_days']}"))
-            return signals
+            # both straddle legs surface as positions of one structure — one
+            # EXIT signal closes the whole structure, so evaluate once.
+            pos = ctx.open_positions[0]
+            entry_ref = pos.underlying_entry if pos.underlying_entry else pos.avg_price
+            # (a) move captured — exit into the spike, before IV deflates
+            if entry_ref and abs(close - entry_ref) / entry_ref >= p["move_exit_pct"] / 100.0:
+                return [Signal(
+                    strategy_id=self.strategy_id, signal_type=SignalType.EXIT,
+                    instrument=sym, timestamp=ctx.now, reference_price=close,
+                    reason=f"move captured: {abs(close - entry_ref) / entry_ref * 100:.2f}% "
+                           f">= {p['move_exit_pct']:.1f}%")]
+            # (b) time stop — the event fizzled; never hold a full loser
+            opened_date = pos.opened_at.date()
+            sessions_held = int(sum(1 for ts in df.index[-40:] if ts.date() > opened_date))
+            if sessions_held > p["max_hold_days"]:
+                return [Signal(
+                    strategy_id=self.strategy_id, signal_type=SignalType.EXIT,
+                    instrument=sym, timestamp=ctx.now, reference_price=close,
+                    reason=f"time stop: {sessions_held} sessions > {p['max_hold_days']}")]
+            return []
 
         # ------------------------------------------------------------- entry
         # coiled: Bollinger squeeze (width at its 120-day minimum) fired recently
