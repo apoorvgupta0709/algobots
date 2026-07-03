@@ -1,0 +1,133 @@
+{
+  "source_url": "https://nsearchives.nseindia.com/content/indices/ind_niftybanklist.csv",
+  "fetched_at_utc": "20260610_080258",
+  "index": "NIFTY BANK",
+  "constituents": [
+    {
+      "company_name": "AU Small Finance Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "AUBANK",
+      "series": "EQ",
+      "isin": "INE949L01017",
+      "fyers_symbol": "NSE:AUBANK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Axis Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "AXISBANK",
+      "series": "EQ",
+      "isin": "INE238A01034",
+      "fyers_symbol": "NSE:AXISBANK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Bank of Baroda",
+      "industry": "Financial Services",
+      "symbol": "BANKBARODA",
+      "series": "EQ",
+      "isin": "INE028A01039",
+      "fyers_symbol": "NSE:BANKBARODA-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Canara Bank",
+      "industry": "Financial Services",
+      "symbol": "CANBK",
+      "series": "EQ",
+      "isin": "INE476A01022",
+      "fyers_symbol": "NSE:CANBK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Federal Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "FEDERALBNK",
+      "series": "EQ",
+      "isin": "INE171A01029",
+      "fyers_symbol": "NSE:FEDERALBNK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "HDFC Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "HDFCBANK",
+      "series": "EQ",
+      "isin": "INE040A01034",
+      "fyers_symbol": "NSE:HDFCBANK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "ICICI Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "ICICIBANK",
+      "series": "EQ",
+      "isin": "INE090A01021",
+      "fyers_symbol": "NSE:ICICIBANK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "IDFC First Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "IDFCFIRSTB",
+      "series": "EQ",
+      "isin": "INE092T01019",
+      "fyers_symbol": "NSE:IDFCFIRSTB-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "IndusInd Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "INDUSINDBK",
+      "series": "EQ",
+      "isin": "INE095A01012",
+      "fyers_symbol": "NSE:INDUSINDBK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Kotak Mahindra Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "KOTAKBANK",
+      "series": "EQ",
+      "isin": "INE237A01036",
+      "fyers_symbol": "NSE:KOTAKBANK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Punjab National Bank",
+      "industry": "Financial Services",
+      "symbol": "PNB",
+      "series": "EQ",
+      "isin": "INE160A01022",
+      "fyers_symbol": "NSE:PNB-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "State Bank of India",
+      "industry": "Financial Services",
+      "symbol": "SBIN",
+      "series": "EQ",
+      "isin": "INE062A01020",
+      "fyers_symbol": "NSE:SBIN-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Union Bank of India",
+      "industry": "Financial Services",
+      "symbol": "UNIONBANK",
+      "series": "EQ",
+      "isin": "INE692A01016",
+      "fyers_symbol": "NSE:UNIONBANK-EQ",
+      "weight": null
+    },
+    {
+      "company_name": "Yes Bank Ltd.",
+      "industry": "Financial Services",
+      "symbol": "YESBANK",
+      "series": "EQ",
+      "isin": "INE528G01035",
+      "fyers_symbol": "NSE:YESBANK-EQ",
+      "weight": null
+    }
+  ]
+}

@@ -1,0 +1,533 @@
+## Daily Market Report
+Generated: 2026-06-05 07:37 UTC
+Scope: read-only research report; Not trade advice; no orders placed.
+
+## Facts
+- NSE:360ONE-EQ (D)
+  - LTP: ₹1,064.80
+  - Change: ₹-7.00 (-0.65%)
+  - Daily candle close: ₹1,071.50
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹1,099.42 / ₹1,055.52 / ₹1,094.72
+  - EMA20: ₹1,089.24
+  - RSI14: 42.7267
+  - MACD(12,26): 3.167; signal 10.2574; histogram -7.0904
+  - ROC20 / ROC60: -3.62% / -0.88%
+  - Donchian20 range: ₹1,049.20 – ₹1,152.00
+  - Gap: -0.35%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.94%; Volatility: normal
+  - RelVol20: 2.5453
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ABB-EQ (D)
+  - LTP: ₹7,145.00
+  - Change: ₹-11.00 (-0.15%)
+  - Daily candle close: ₹7,192.50
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹6,761.38 / ₹6,787.19 / ₹5,692.20
+  - EMA20: ₹6,940.84
+  - RSI14: 76.5978
+  - MACD(12,26): 111.2123; signal 57.8569; histogram 53.3554
+  - ROC20 / ROC60: 0.06% / 21.31%
+  - Donchian20 range: ₹6,171.50 – ₹7,340.00
+  - Gap: 0.27%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.83%; Volatility: normal
+  - RelVol20: 0.1803
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ABCAPITAL-EQ (D)
+  - LTP: ₹356.45
+  - Change: ₹2.80 (0.79%)
+  - Daily candle close: ₹356.25
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹354.24 / ₹340.97 / ₹329.01
+  - EMA20: ₹353.60
+  - RSI14: 49.1906
+  - MACD(12,26): 2.699; signal 3.915; histogram -1.216
+  - ROC20 / ROC60: -3.46% / 8.75%
+  - Donchian20 range: ₹339.45 – ₹369.85
+  - Gap: 0.07%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.84%; Volatility: normal
+  - RelVol20: 0.7711
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ADANIENSOL-EQ (D)
+  - LTP: ₹1,560.80
+  - Change: ₹40.80 (2.68%)
+  - Daily candle close: ₹1,575.20
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹1,408.48 / ₹1,277.79 / ₹1,024.59
+  - EMA20: ₹1,435.56
+  - RSI14: 80.7518
+  - MACD(12,26): 70.7411; signal 61.682; histogram 9.0591
+  - ROC20 / ROC60: 13.56% / 59.45%
+  - Donchian20 range: ₹1,236.60 – ₹1,591.40
+  - Gap: 0.55%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 4.16%; Volatility: high
+  - RelVol20: 0.759
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ADANIENT-EQ (D)
+  - LTP: ₹3,002.50
+  - Change: ₹29.70 (1.00%)
+  - Daily candle close: ₹3,027.40
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹2,770.28 / ₹2,393.07 / ₹2,293.08
+  - EMA20: ₹2,785.68
+  - RSI14: 74.6751
+  - MACD(12,26): 167.2328; signal 163.3831; histogram 3.8497
+  - ROC20 / ROC60: 20.44% / 44.91%
+  - Donchian20 range: ₹2,400.10 – ₹3,050.00
+  - Gap: 0.65%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.88%; Volatility: normal
+  - RelVol20: 1.3519
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ADANIGREEN-EQ (D)
+  - LTP: ₹1,485.00
+  - Change: ₹61.70 (4.33%)
+  - Daily candle close: ₹1,492.90
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹1,405.82 / ₹1,210.27 / ₹1,042.14
+  - EMA20: ₹1,395.11
+  - RSI14: 68.2942
+  - MACD(12,26): 65.5642; signal 72.3252; histogram -6.761
+  - ROC20 / ROC60: 9.37% / 68.78%
+  - Donchian20 range: ₹1,291.40 – ₹1,532.50
+  - Gap: 0.54%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 3.58%; Volatility: high
+  - RelVol20: 0.8641
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ADANIPORTS-EQ (D)
+  - LTP: ₹1,815.20
+  - Change: ₹24.30 (1.36%)
+  - Daily candle close: ₹1,820.60
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹1,784.10 / ₹1,624.22 / ₹1,489.65
+  - EMA20: ₹1,770.41
+  - RSI14: 55.4933
+  - MACD(12,26): 46.5298; signal 54.952; histogram -8.4222
+  - ROC20 / ROC60: 5.07% / 21.43%
+  - Donchian20 range: ₹1,683.20 – ₹1,842.80
+  - Gap: 0.59%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.14%; Volatility: normal
+  - RelVol20: 0.3696
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ADANIPOWER-EQ (D)
+  - LTP: ₹232.28
+  - Change: ₹2.25 (0.98%)
+  - Daily candle close: ₹234.07
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹227.45 / ₹204.40 / ₹158.47
+  - EMA20: ₹227.83
+  - RSI14: 59.9407
+  - MACD(12,26): 8.1441; signal 9.5567; histogram -1.4126
+  - ROC20 / ROC60: 1.69% / 67.06%
+  - Donchian20 range: ₹208.03 – ₹254.20
+  - Gap: 0.72%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 3.64%; Volatility: high
+  - RelVol20: 0.4575
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ALKEM-EQ (D)
+  - LTP: ₹5,251.50
+  - Change: ₹-25.00 (-0.47%)
+  - Daily candle close: ₹5,253.50
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹5,428.73 / ₹5,411.02 / ₹5,520.79
+  - EMA20: ₹5,385.64
+  - RSI14: 32.8413
+  - MACD(12,26): -48.9017; signal -24.3191; histogram -24.5826
+  - ROC20 / ROC60: -6.03% / -5.34%
+  - Donchian20 range: ₹5,162.50 – ₹5,789.00
+  - Gap: 0.44%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 3.04%; Volatility: high
+  - RelVol20: 0.4124
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:AMBUJACEM-EQ (D)
+  - LTP: ₹417.50
+  - Change: ₹-8.85 (-2.08%)
+  - Daily candle close: ₹416.75
+  - Daily candle trend: bearish
+  - SMA20 / SMA50 / SMA200: ₹436.60 / ₹437.65 / ₹517.91
+  - EMA20: ₹436.89
+  - RSI14: 40.3628
+  - MACD(12,26): -4.171; signal -2.2792; histogram -1.8918
+  - ROC20 / ROC60: -7.52% / -13.18%
+  - Donchian20 range: ₹416.30 – ₹462.00
+  - Gap: 0.86%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.72%; Volatility: normal
+  - RelVol20: 1.3125
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:APLAPOLLO-EQ (D)
+  - LTP: ₹1,834.90
+  - Change: ₹26.50 (1.47%)
+  - Daily candle close: ₹1,838.60
+  - Daily candle trend: bearish
+  - SMA20 / SMA50 / SMA200: ₹1,863.56 / ₹1,937.32 / ₹1,874.78
+  - EMA20: ₹1,861.56
+  - RSI14: 40.5633
+  - MACD(12,26): -39.9632; signal -39.1394; histogram -0.8238
+  - ROC20 / ROC60: -6.85% / -14.93%
+  - Donchian20 range: ₹1,736.00 – ₹2,011.70
+  - Gap: 0.09%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.80%; Volatility: normal
+  - RelVol20: 0.8733
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:APOLLOHOSP-EQ (D)
+  - LTP: ₹8,280.50
+  - Change: ₹31.50 (0.38%)
+  - Daily candle close: ₹8,300.50
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹8,167.65 / ₹7,811.17 / ₹7,563.31
+  - EMA20: ₹8,132.97
+  - RSI14: 60.0739
+  - MACD(12,26): 122.1253; signal 133.577; histogram -11.4516
+  - ROC20 / ROC60: 5.91% / 6.76%
+  - Donchian20 range: ₹7,812.50 – ₹8,443.00
+  - Gap: 0.19%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.18%; Volatility: normal
+  - RelVol20: 0.1743
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ASHOKLEY-EQ (D)
+  - LTP: ₹144.86
+  - Change: ₹0.42 (0.29%)
+  - Daily candle close: ₹144.77
+  - Daily candle trend: bearish
+  - SMA20 / SMA50 / SMA200: ₹154.66 / ₹161.94 / ₹162.53
+  - EMA20: ₹154.70
+  - RSI14: 39.8198
+  - MACD(12,26): -4.9676; signal -4.0847; histogram -0.8829
+  - ROC20 / ROC60: -15.23% / -28.70%
+  - Donchian20 range: ₹142.20 – ₹170.00
+  - Gap: 1.08%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 3.80%; Volatility: high
+  - RelVol20: 0.4917
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ASIANPAINT-EQ (D)
+  - LTP: ₹2,690.90
+  - Change: ₹29.30 (1.10%)
+  - Daily candle close: ₹2,692.00
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹2,626.31 / ₹2,469.16 / ₹2,543.93
+  - EMA20: ₹2,616.59
+  - RSI14: 69.6901
+  - MACD(12,26): 53.4424; signal 56.5974; histogram -3.1549
+  - ROC20 / ROC60: 6.38% / 17.67%
+  - Donchian20 range: ₹2,500.00 – ₹2,778.80
+  - Gap: 0.17%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.35%; Volatility: normal
+  - RelVol20: 0.5226
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ASTRAL-EQ (D)
+  - LTP: ₹1,529.40
+  - Change: ₹-19.90 (-1.28%)
+  - Daily candle close: ₹1,535.00
+  - Daily candle trend: bearish
+  - SMA20 / SMA50 / SMA200: ₹1,538.73 / ₹1,561.52 / ₹1,495.72
+  - EMA20: ₹1,544.31
+  - RSI14: 47.8695
+  - MACD(12,26): -4.9217; signal -7.3506; histogram 2.4289
+  - ROC20 / ROC60: -2.17% / -7.70%
+  - Donchian20 range: ₹1,431.60 – ₹1,614.80
+  - Gap: 0.37%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 3.16%; Volatility: high
+  - RelVol20: 0.2687
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:ATGL-EQ (D)
+  - LTP: ₹761.15
+  - Change: ₹17.10 (2.30%)
+  - Daily candle close: ₹758.70
+  - Daily candle trend: bullish
+  - SMA20 / SMA50 / SMA200: ₹673.08 / ₹621.02 / ₹593.72
+  - EMA20: ₹692.15
+  - RSI14: 69.2111
+  - MACD(12,26): 38.6119; signal 32.1842; histogram 6.4276
+  - ROC20 / ROC60: 17.76% / 56.93%
+  - Donchian20 range: ₹588.10 – ₹859.85
+  - Gap: 0.40%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 6.27%; Volatility: high
+  - RelVol20: 0.5851
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:AUBANK-EQ (D)
+  - LTP: ₹967.05
+  - Change: ₹5.00 (0.52%)
+  - Daily candle close: ₹966.50
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹988.42 / ₹975.48 / ₹910.16
+  - EMA20: ₹984.33
+  - RSI14: 42.4003
+  - MACD(12,26): -6.1014; signal -2.0454; histogram -4.0561
+  - ROC20 / ROC60: -6.38% / -0.71%
+  - Donchian20 range: ₹941.40 – ₹1,052.30
+  - Gap: 0.04%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.79%; Volatility: normal
+  - RelVol20: 0.9062
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:AUROPHARMA-EQ (D)
+  - LTP: ₹1,467.10
+  - Change: ₹3.50 (0.24%)
+  - Daily candle close: ₹1,468.00
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹1,476.82 / ₹1,411.89 / ₹1,219.96
+  - EMA20: ₹1,455.81
+  - RSI14: 40.9354
+  - MACD(12,26): 8.554; signal 16.6544; histogram -8.1003
+  - ROC20 / ROC60: -0.72% / 19.79%
+  - Donchian20 range: ₹1,411.00 – ₹1,550.00
+  - Gap: 1.39%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.71%; Volatility: normal
+  - RelVol20: 0.7558
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:AXISBANK-EQ (D)
+  - LTP: ₹1,263.60
+  - Change: ₹10.30 (0.82%)
+  - Daily candle close: ₹1,269.40
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹1,266.33 / ₹1,278.72 / ₹1,244.27
+  - EMA20: ₹1,272.96
+  - RSI14: 57.1512
+  - MACD(12,26): -5.7842; signal -5.4449; histogram -0.3394
+  - ROC20 / ROC60: -1.80% / -5.91%
+  - Donchian20 range: ₹1,222.10 – ₹1,317.00
+  - Gap: 0.53%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.03%; Volatility: normal
+  - RelVol20: 0.6782
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:BAJAJ-AUTO-EQ (D)
+  - LTP: ₹10,350.00
+  - Change: ₹-12.00 (-0.12%)
+  - Daily candle close: ₹10,373.00
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹10,444.03 / ₹9,881.60 / ₹9,347.63
+  - EMA20: ₹10,342.82
+  - RSI14: 49.8753
+  - MACD(12,26): 114.5142; signal 169.2656; histogram -54.7514
+  - ROC20 / ROC60: -2.19% / 5.80%
+  - Donchian20 range: ₹10,078.50 – ₹10,834.00
+  - Gap: 0.31%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.43%; Volatility: normal
+  - RelVol20: 0.3062
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:BAJAJFINSV-EQ (D)
+  - LTP: ₹1,704.30
+  - Change: ₹-5.50 (-0.32%)
+  - Daily candle close: ₹1,719.20
+  - Daily candle trend: bearish
+  - SMA20 / SMA50 / SMA200: ₹1,760.61 / ₹1,760.80 / ₹1,950.74
+  - EMA20: ₹1,759.75
+  - RSI14: 48.215
+  - MACD(12,26): -12.9683; signal -7.2484; histogram -5.7199
+  - ROC20 / ROC60: -5.77% / -10.07%
+  - Donchian20 range: ₹1,693.80 – ₹1,827.20
+  - Gap: 0.60%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.15%; Volatility: normal
+  - RelVol20: 0.9645
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:BAJAJHLDNG-EQ (D)
+  - LTP: ₹10,245.00
+  - Change: ₹118.00 (1.17%)
+  - Daily candle close: ₹10,278.00
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹10,362.30 / ₹10,085.34 / ₹11,338.10
+  - EMA20: ₹10,329.18
+  - RSI14: 48.9019
+  - MACD(12,26): 4.4001; signal 48.3814; histogram -43.9812
+  - ROC20 / ROC60: -3.01% / -3.61%
+  - Donchian20 range: ₹9,940.00 – ₹10,931.00
+  - Gap: 0.61%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.72%; Volatility: normal
+  - RelVol20: 0.6052
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:BAJFINANCE-EQ (D)
+  - LTP: ₹890.55
+  - Change: ₹16.15 (1.85%)
+  - Daily candle close: ₹898.10
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹911.91 / ₹903.67 / ₹962.81
+  - EMA20: ₹907.92
+  - RSI14: 46.0505
+  - MACD(12,26): -8.8566; signal -3.9572; histogram -4.8993
+  - ROC20 / ROC60: -7.67% / -6.68%
+  - Donchian20 range: ₹860.45 – ₹971.95
+  - Gap: -0.05%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.71%; Volatility: normal
+  - RelVol20: 1.0251
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:BANKBARODA-EQ (D)
+  - LTP: ₹264.25
+  - Change: ₹-7.05 (-2.60%)
+  - Daily candle close: ₹265.55
+  - Daily candle trend: bearish
+  - SMA20 / SMA50 / SMA200: ₹265.58 / ₹268.20 / ₹276.09
+  - EMA20: ₹267.36
+  - RSI14: 55.788
+  - MACD(12,26): -0.5458; signal -1.1938; histogram 0.648
+  - ROC20 / ROC60: -1.78% / -12.03%
+  - Donchian20 range: ₹255.30 – ₹274.25
+  - Gap: -2.34%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.32%; Volatility: normal
+  - RelVol20: 1.3353
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+- NSE:BANKINDIA-EQ (D)
+  - LTP: ₹141.21
+  - Change: ₹1.52 (1.09%)
+  - Daily candle close: ₹141.36
+  - Daily candle trend: neutral
+  - SMA20 / SMA50 / SMA200: ₹140.93 / ₹143.29 / ₹141.87
+  - EMA20: ₹141.24
+  - RSI14: 48.5099
+  - MACD(12,26): -1.1748; signal -1.3254; histogram 0.1505
+  - ROC20 / ROC60: 0.71% / -13.90%
+  - Donchian20 range: ₹134.60 – ₹147.49
+  - Gap: 0.15%
+  - Breakout20 / Breakout55: no / no
+  - ATR%14: 2.70%; Volatility: normal
+  - RelVol20: 0.7902
+  - Factor time: 2026-06-05 00:00 UTC; Quote stored: 2026-06-05 07:37 UTC
+  - Data freshness: factor 7h old; quote 7h old
+
+## Risk flags / setups
+- NSE:360ONE-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -7.0904
+  - Volume expansion: relative volume 2.5453
+- NSE:ABB-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - Momentum extended: RSI 76.5978
+  - MACD positive momentum: histogram 53.3554
+  - Low participation: relative volume 0.1803
+- NSE:ABCAPITAL-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD negative momentum: histogram -1.216
+- NSE:ADANIENSOL-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - Momentum extended: RSI 80.7518
+  - MACD positive momentum: histogram 9.0591
+  - High volatility: ATR% 4.16%
+- NSE:ADANIENT-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - Momentum extended: RSI 74.6751
+  - MACD positive momentum: histogram 3.8497
+- NSE:ADANIGREEN-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD negative momentum: histogram -6.761
+  - High volatility: ATR% 3.58%
+- NSE:ADANIPORTS-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD negative momentum: histogram -8.4222
+  - Low participation: relative volume 0.3696
+- NSE:ADANIPOWER-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD negative momentum: histogram -1.4126
+  - High volatility: ATR% 3.64%
+  - Low participation: relative volume 0.4575
+- NSE:ALKEM-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - Weak momentum / possible oversold watch: RSI 32.8413
+  - MACD negative momentum: histogram -24.5826
+  - High volatility: ATR% 3.04%
+  - Low participation: relative volume 0.4124
+- NSE:AMBUJACEM-EQ
+  - Bearish daily candle trend: close below SMA20/SMA50
+  - MACD negative momentum: histogram -1.8918
+- NSE:APLAPOLLO-EQ
+  - Bearish daily candle trend: close below SMA20/SMA50
+  - MACD negative momentum: histogram -0.8238
+- NSE:APOLLOHOSP-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD negative momentum: histogram -11.4516
+  - Low participation: relative volume 0.1743
+- NSE:ASHOKLEY-EQ
+  - Bearish daily candle trend: close below SMA20/SMA50
+  - MACD negative momentum: histogram -0.8829
+  - High volatility: ATR% 3.80%
+  - Low participation: relative volume 0.4917
+- NSE:ASIANPAINT-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD negative momentum: histogram -3.1549
+- NSE:ASTRAL-EQ
+  - Bearish daily candle trend: close below SMA20/SMA50
+  - MACD positive momentum: histogram 2.4289
+  - High volatility: ATR% 3.16%
+  - Low participation: relative volume 0.2687
+- NSE:ATGL-EQ
+  - Bullish daily candle trend: close above SMA20/SMA50
+  - MACD positive momentum: histogram 6.4276
+  - High volatility: ATR% 6.27%
+- NSE:AUBANK-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -4.0561
+- NSE:AUROPHARMA-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -8.1003
+- NSE:AXISBANK-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -0.3394
+- NSE:BAJAJ-AUTO-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -54.7514
+  - Low participation: relative volume 0.3062
+- NSE:BAJAJFINSV-EQ
+  - Bearish daily candle trend: close below SMA20/SMA50
+  - MACD negative momentum: histogram -5.7199
+- NSE:BAJAJHLDNG-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -43.9812
+- NSE:BAJFINANCE-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD negative momentum: histogram -4.8993
+- NSE:BANKBARODA-EQ
+  - Bearish daily candle trend: close below SMA20/SMA50
+  - MACD positive momentum: histogram 0.648
+  - Gap risk: opening gap -2.34%
+- NSE:BANKINDIA-EQ
+  - Neutral daily candle trend: mixed SMA structure
+  - MACD positive momentum: histogram 0.1505
+
+## Suggested next actions
+- Refresh FYERS quotes/candles before market decisions.
+- Review high-volatility or weak-momentum names manually before creating any trade idea.
+- If a setup is worth tracking, record it as `trading.trade_ideas` for review; execution still requires explicit approval.

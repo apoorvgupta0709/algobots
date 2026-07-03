@@ -1,0 +1,9 @@
+# Default multi-symbol watchlist for the read-only daily technical report.
+# Columns: symbol,fyers_symbol,company,sector,basket,notes
+# Lines starting with '#' and blank lines are ignored.
+symbol,fyers_symbol,company,sector,basket,notes
+TVSMOTOR,NSE:TVSMOTOR-EQ,TVS Motor Company,Auto,core,Two-wheeler manufacturer
+RELIANCE,NSE:RELIANCE-EQ,Reliance Industries,Energy,core,Conglomerate
+HDFCBANK,NSE:HDFCBANK-EQ,HDFC Bank,Banking,core,Private sector bank
+INFY,NSE:INFY-EQ,Infosys,IT,core,IT services
+TATAMOTORS,NSE:TATAMOTORS-EQ,Tata Motors,Auto,core,Automobiles

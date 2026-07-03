@@ -1,0 +1,14 @@
+{
+  "live_orders_enabled": false,
+  "kill_switch_enabled": true,
+  "max_capital": 5000,
+  "max_risk_per_trade": 50,
+  "max_daily_loss": 100,
+  "max_weekly_loss": 150,
+  "max_open_positions": 1,
+  "allowed_product_types": ["CNC"],
+  "allowed_order_types": ["LIMIT"],
+  "default_product_type": "CNC",
+  "default_order_type": "LIMIT",
+  "notes": "Phase 2B live-order gate scaffold. Default is dry-run only; no FYERS order placement code is active."
+}

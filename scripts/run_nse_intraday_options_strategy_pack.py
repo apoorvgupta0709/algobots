@@ -1,0 +1,939 @@
+#!/usr/bin/env python3
+"""Backtest and paper-scan the NSE intraday options strategy pack.
+
+Paper/proxy only. No FYERS order APIs are imported or called. Live orders are
+blocked by config and DB constraints. Backtests use stored 5-minute underlying
+candles and simulate option/spread P&L with transparent proxy risk rules because
+expired option-chain candles are not available for the full history.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from collections import defaultdict
+from dataclasses import asdict, dataclass
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
+from typing import Any, Iterable
+
+import psycopg
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from scripts.nse_intraday_options_strategy_pack import (  # noqa: E402
+    Candle,
+    StrategyPackConfig,
+    StrategySignal,
+    build_default_config,
+    config_to_json_dict,
+    evaluate_cpr_trend_debit_spread,
+    evaluate_expiry_tuesday_directional,
+    evaluate_nifty_orb_debit_spread,
+    evaluate_nifty_vwap_mean_reversion,
+    evaluate_single_stock_momentum,
+    load_config,
+    save_default_config,
+)
+
+DEFAULT_CONFIG = PROJECT_ROOT / "config" / "nse_intraday_options_strategy_pack.json"
+REPORT_DIR = PROJECT_ROOT / "reports"
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://hermes@127.0.0.1:55432/finance_tracker")
+IST = timezone(timedelta(hours=5, minutes=30))
+TWO = Decimal("0.01")
+
+SYMBOLS = {
+    "NIFTY": "NSE:NIFTY50-INDEX",
+    "BANKNIFTY": "NSE:NIFTYBANK-INDEX",
+    "HDFCBANK": "NSE:HDFCBANK-EQ",
+    "ICICIBANK": "NSE:ICICIBANK-EQ",
+    "SBIN": "NSE:SBIN-EQ",
+    "RELIANCE": "NSE:RELIANCE-EQ",
+    "INFY": "NSE:INFY-EQ",
+    "TCS": "NSE:TCS-EQ",
+}
+BANK_STOCKS = {"HDFCBANK", "ICICIBANK", "SBIN"}
+STOCK_LOTS = {"RELIANCE": 500, "HDFCBANK": 550, "ICICIBANK": 700, "SBIN": 750, "INFY": 400, "TCS": 175}
+STOCK_DEBIT_CAP = {"RELIANCE": Decimal("3.0"), "HDFCBANK": Decimal("2.7"), "ICICIBANK": Decimal("2.1"), "SBIN": Decimal("2.0"), "INFY": Decimal("3.75"), "TCS": Decimal("8.6")}
+# Strike spacing used to cap debit-spread payouts at their structural max value.
+SPREAD_WIDTH_POINTS = {"NIFTY": Decimal("50"), "BANKNIFTY": Decimal("100")}
+# Maximum age of a signal before tick mode refuses to open it (two 5m candles).
+SIGNAL_MAX_AGE = timedelta(minutes=10)
+
+
+def strategy_cost_rupees(strategy_id: str) -> Decimal:
+    return Decimal("250") if strategy_id == "single_stock_momentum_index_confirm" else Decimal("120")
+
+
+def decimal_or_none(value) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST)
+
+@dataclass
+class ProxyTrade:
+    strategy_id: str
+    strategy_name: str
+    day: date
+    underlying: str
+    underlying_symbol: str
+    direction: str
+    structure: str
+    entry_time: datetime
+    exit_time: datetime
+    entry_underlying: Decimal
+    exit_underlying: Decimal
+    risk_rupees: Decimal
+    pnl_rupees: Decimal
+    pnl_r: Decimal
+    exit_reason: str
+    signal_reason: str
+    max_loss_rupees: Decimal
+    target_r: Decimal
+
+
+def money(v: Decimal) -> str:
+    return f"₹{q2(v):,.2f}"
+
+
+def q2(v: Decimal) -> Decimal:
+    return v.quantize(TWO, rounding=ROUND_HALF_UP)
+
+
+def connect_db() -> psycopg.Connection:
+    # Pin the session timezone so ts::date / current_date resolve in IST on any host.
+    return psycopg.connect(DATABASE_URL, options="-c timezone=Asia/Kolkata")
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def ensure_config(path: Path = DEFAULT_CONFIG) -> StrategyPackConfig:
+    if not path.exists():
+        save_default_config(path)
+    return load_config(path)
+
+
+def fetch_candles(conn: psycopg.Connection, symbols: list[str], start: date, end: date, resolution: str = "5") -> dict[str, list[Candle]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            select symbol, ts, open, high, low, close, volume
+            from market.candles
+            where symbol = any(%s)
+              and resolution = %s
+              and ts::date between %s and %s
+            order by symbol, ts
+            """,
+            (symbols, resolution, start, end),
+        )
+        out: dict[str, list[Candle]] = defaultdict(list)
+        for sym, ts, o, h, l, c, vol in cur.fetchall():
+            local_ts = ts.astimezone(IST).replace(tzinfo=None) if getattr(ts, "tzinfo", None) else ts
+            out[sym].append(Candle(local_ts, Decimal(str(o)), Decimal(str(h)), Decimal(str(l)), Decimal(str(c)), int(vol or 0)))
+        return dict(out)
+
+
+def by_day(candles: Iterable[Candle]) -> dict[date, list[Candle]]:
+    days: dict[date, list[Candle]] = defaultdict(list)
+    for row in candles:
+        days[row.ts.date()].append(row)
+    return {d: sorted(rows, key=lambda x: x.ts) for d, rows in days.items()}
+
+
+def first_candle_at_or_after(rows: list[Candle], t: time) -> Candle | None:
+    return next((c for c in rows if c.ts.time() >= t), None)
+
+
+def intraday_pct(rows: list[Candle], until: datetime | None = None) -> Decimal:
+    filtered = [c for c in rows if until is None or c.ts <= until]
+    if len(filtered) < 2 or filtered[0].open == 0:
+        return Decimal("0")
+    return ((filtered[-1].close - filtered[0].open) / filtered[0].open * Decimal("100")).quantize(Decimal("0.0001"))
+
+
+def simple_rsi9(rows: list[Candle]) -> Decimal:
+    if len(rows) < 3:
+        return Decimal("50")
+    tail = rows[-10:]
+    gains = []
+    losses = []
+    for a, b in zip(tail, tail[1:]):
+        diff = b.close - a.close
+        if diff >= 0:
+            gains.append(diff)
+        else:
+            losses.append(-diff)
+    avg_gain = sum(gains, Decimal("0")) / Decimal(max(1, len(gains)))
+    avg_loss = sum(losses, Decimal("0")) / Decimal(max(1, len(losses)))
+    if avg_loss == 0:
+        return Decimal("70") if avg_gain > 0 else Decimal("50")
+    rs = avg_gain / avg_loss
+    return Decimal("100") - (Decimal("100") / (Decimal("1") + rs))
+
+
+def previous_trading_day(days: list[date], day: date) -> date | None:
+    before = [d for d in days if d < day]
+    return before[-1] if before else None
+
+
+def is_cpr_narrow(prev_rows: list[Candle], underlying: str) -> bool:
+    if not prev_rows:
+        return False
+    high = max(c.high for c in prev_rows)
+    low = min(c.low for c in prev_rows)
+    close = prev_rows[-1].close
+    pivot = (high + low + close) / Decimal("3")
+    bc = (high + low) / Decimal("2")
+    tc = Decimal("2") * pivot - bc
+    threshold = Decimal("0.0035") if underlying == "BANKNIFTY" else Decimal("0.003")
+    return abs(tc - bc) / close <= threshold if close else False
+
+
+def sessions_to_monthly_expiry(day: date, trading_days: list[date]) -> int:
+    # Last Tuesday of the calendar month.
+    last = date(day.year, day.month, 28)
+    while (last + timedelta(days=1)).month == day.month:
+        last += timedelta(days=1)
+    while last.weekday() != 1:
+        last -= timedelta(days=1)
+    return len([d for d in trading_days if day <= d <= last])
+
+
+def debit_spread_max_r(signal: StrategySignal, underlying: str, risk: Decimal) -> Decimal | None:
+    """Structural payout ceiling for a debit spread: (width - debit) * lot / risk.
+
+    Returns None when the structure is not a debit spread or the strike width is
+    unknown (e.g. single stocks), in which case the configured target_r stands.
+    """
+    if not signal.structure.endswith("debit_spread") or risk <= 0:
+        return None
+    width = SPREAD_WIDTH_POINTS.get(underlying)
+    debit = signal.metadata.get("net_debit_per_share")
+    lot = signal.metadata.get("lot_size")
+    if width is None or debit is None or lot is None:
+        return None
+    max_value = (width - Decimal(str(debit))) * Decimal(str(lot))
+    if max_value <= 0:
+        return None
+    return (max_value / risk).quantize(Decimal("0.01"))
+
+
+def simulate_proxy_trade(
+    signal: StrategySignal,
+    rows: list[Candle],
+    *,
+    strategy_name: str,
+    underlying: str,
+    underlying_symbol: str,
+    stop_pct: Decimal,
+    target_r: Decimal,
+    time_exit: time,
+    cost_rupees: Decimal,
+) -> ProxyTrade | None:
+    after = [c for c in rows if c.ts > signal.entry_time]
+    if not after:
+        return None
+    risk = max(signal.max_loss_rupees, Decimal("1"))
+    spread_cap = debit_spread_max_r(signal, underlying, risk)
+    if spread_cap is not None:
+        target_r = min(target_r, spread_cap)
+    sign = Decimal("1") if signal.direction in {"long", "long_ce"} else Decimal("-1")
+    entry = signal.underlying_entry
+    stop_underlying = entry * (Decimal("1") - sign * stop_pct)
+    target_underlying = entry * (Decimal("1") + sign * stop_pct * target_r)
+    # The cards' real exits: a 5m close back through the broken level
+    # (structure_level) and a rupee premium stop. Both exit at the candle close
+    # with a proportional loss, so typical losses land well above the full -1R
+    # debit that the bare stop_pct hard stop charges.
+    structure_level = decimal_or_none(signal.metadata.get("structure_level"))
+    premium_stop_r: Decimal | None = None
+    if Decimal("0") < signal.stop_loss_rupees < risk:
+        premium_stop_r = -(signal.stop_loss_rupees / risk)
+    exit_row = after[-1]
+    pnl_r = Decimal("0")
+    reason = "time_exit"
+    for row in after:
+        if row.ts.time() > time_exit:
+            exit_row = row
+            move = sign * (row.close - entry) / (entry * stop_pct)
+            pnl_r = max(Decimal("-1"), min(target_r, move))
+            reason = "time_exit"
+            break
+        # Conservative ordering inside one candle: disaster stop, then
+        # close-based stops, then target.
+        stopped = row.low <= stop_underlying if sign > 0 else row.high >= stop_underlying
+        targeted = row.high >= target_underlying if sign > 0 else row.low <= target_underlying
+        if stopped:
+            exit_row = row
+            pnl_r = Decimal("-1")
+            reason = "structure_stop"
+            break
+        close_r = sign * (row.close - entry) / (entry * stop_pct)
+        structure_hit = structure_level is not None and (
+            row.close < structure_level if sign > 0 else row.close > structure_level
+        )
+        premium_hit = premium_stop_r is not None and close_r <= premium_stop_r
+        if structure_hit or premium_hit:
+            exit_row = row
+            pnl_r = max(Decimal("-1"), min(target_r, close_r))
+            reason = "structure_close_stop" if structure_hit else "premium_stop"
+            break
+        if targeted:
+            exit_row = row
+            pnl_r = target_r
+            reason = "target_r"
+            break
+    else:
+        row = after[-1]
+        exit_row = row
+        move = sign * (row.close - entry) / (entry * stop_pct)
+        pnl_r = max(Decimal("-1"), min(target_r, move))
+        reason = "eod_proxy_exit"
+    pnl = q2((pnl_r * risk) - cost_rupees)
+    return ProxyTrade(
+        strategy_id=signal.strategy_id,
+        strategy_name=strategy_name,
+        day=signal.entry_time.date(),
+        underlying=underlying,
+        underlying_symbol=underlying_symbol,
+        direction=signal.direction,
+        structure=signal.structure,
+        entry_time=signal.entry_time,
+        exit_time=exit_row.ts,
+        entry_underlying=q2(entry),
+        exit_underlying=q2(exit_row.close),
+        risk_rupees=q2(risk),
+        pnl_rupees=pnl,
+        pnl_r=q2(pnl / risk),
+        exit_reason=reason,
+        signal_reason=signal.reason,
+        max_loss_rupees=q2(signal.max_loss_rupees),
+        target_r=target_r,
+    )
+
+
+def runnable_strategy(cfg: StrategyPackConfig, sid: str):
+    """Return the strategy config when present, enabled, and paper-enabled; else None."""
+    strat = cfg.strategies.get(sid)
+    if strat is None or not strat.enabled or not strat.paper_trade_enabled:
+        return None
+    return strat
+
+
+def evaluate_day(day: date, data_by_symbol_day: dict[str, dict[date, list[Candle]]], all_days: list[date], cfg: StrategyPackConfig) -> list[tuple[StrategySignal, str, str, str, Decimal, Decimal, time]]:
+    results: list[tuple[StrategySignal, str, str, str, Decimal, Decimal, time]] = []
+    nifty = data_by_symbol_day.get(SYMBOLS["NIFTY"], {}).get(day, [])
+    banknifty = data_by_symbol_day.get(SYMBOLS["BANKNIFTY"], {}).get(day, [])
+    prev_day = previous_trading_day(all_days, day)
+    prev_nifty = data_by_symbol_day.get(SYMBOLS["NIFTY"], {}).get(prev_day, []) if prev_day else []
+    prev_bank = data_by_symbol_day.get(SYMBOLS["BANKNIFTY"], {}).get(prev_day, []) if prev_day else []
+
+    orb_cfg = runnable_strategy(cfg, "nifty_orb_debit_spread")
+    if orb_cfg and nifty:
+        sig = evaluate_nifty_orb_debit_spread(nifty, vix=Decimal("15"), net_debit_per_share=Decimal("22"), lot_size=65, max_trade_loss=orb_cfg.max_trade_loss)
+        if sig:
+            results.append((sig, "NIFTY", SYMBOLS["NIFTY"], "Nifty ORB Debit Spread", Decimal("0.0025"), Decimal("2"), time(13, 45)))
+
+    cpr_cfg = runnable_strategy(cfg, "cpr_trend_debit_spread")
+    if cpr_cfg:
+        sig = None
+        under = "NIFTY"
+        symbol = SYMBOLS["NIFTY"]
+        rows = nifty
+        if "NIFTY" in cpr_cfg.underlyings and nifty and prev_nifty:
+            sig = evaluate_cpr_trend_debit_spread(nifty, previous_day=prev_nifty, underlying="NIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("22"), lot_size=65, sessions_to_expiry=10, max_trade_loss=cpr_cfg.max_trade_loss)
+        if not sig and "BANKNIFTY" in cpr_cfg.underlyings and banknifty and prev_bank:
+            under = "BANKNIFTY"
+            symbol = SYMBOLS["BANKNIFTY"]
+            rows = banknifty
+            sig = evaluate_cpr_trend_debit_spread(banknifty, previous_day=prev_bank, underlying="BANKNIFTY", vix=Decimal("16"), net_debit_per_share=Decimal("45"), lot_size=30, sessions_to_expiry=sessions_to_monthly_expiry(day, all_days), max_trade_loss=cpr_cfg.max_trade_loss)
+        if sig:
+            results.append((sig, under, symbol, "CPR Trend-Day Debit Spread", Decimal("0.0025"), Decimal("2"), time(14, 45)))
+
+    expiry_cfg = runnable_strategy(cfg, "expiry_tuesday_directional")
+    if expiry_cfg and nifty:
+        sig = evaluate_expiry_tuesday_directional(nifty, trade_date=day, vix=Decimal("18"), option_premium=Decimal("80"), lot_size=65, max_trade_loss=expiry_cfg.max_trade_loss)
+        if sig:
+            results.append((sig, "NIFTY", SYMBOLS["NIFTY"], "Expiry Tuesday Nifty Defined-Risk Directional", Decimal("0.0020"), Decimal("1"), time(13, 0)))
+
+    vwap_cfg = runnable_strategy(cfg, "nifty_vwap_mean_reversion")
+    if vwap_cfg and nifty:
+        cpr_narrow = is_cpr_narrow(prev_nifty, "NIFTY") if prev_nifty else False
+        # Evaluate at each candle after 09:50 until first signal.
+        for i in range(3, len(nifty)):
+            partial = nifty[: i + 1]
+            sig = evaluate_nifty_vwap_mean_reversion(partial, is_range_day=not cpr_narrow, is_cpr_narrow=cpr_narrow, vix=Decimal("15"), rsi9=simple_rsi9(partial), option_premium=Decimal("90"), lot_size=65, max_trade_loss=vwap_cfg.max_trade_loss)
+            if sig:
+                results.append((sig, "NIFTY", SYMBOLS["NIFTY"], "Nifty VWAP Mean Reversion Long", Decimal("0.0030"), Decimal("1.2"), time(14, 45)))
+                break
+
+    stock_cfg = runnable_strategy(cfg, "single_stock_momentum_index_confirm")
+    if stock_cfg:
+        for stock in ["HDFCBANK", "ICICIBANK", "SBIN", "RELIANCE", "INFY", "TCS"]:
+            srows = data_by_symbol_day.get(SYMBOLS[stock], {}).get(day, [])
+            idx_name = "BANKNIFTY" if stock in BANK_STOCKS else "NIFTY"
+            irows = banknifty if idx_name == "BANKNIFTY" else nifty
+            if not srows or not irows:
+                continue
+            first_break = first_candle_at_or_after(srows, time(9, 45))
+            pct_until = first_break.ts if first_break else None
+            sig = evaluate_single_stock_momentum(
+                srows,
+                irows,
+                stock_symbol=stock,
+                confirming_index=idx_name,
+                vix=Decimal("16"),
+                option_spread_pct=Decimal("0.003"),
+                net_debit_per_share=STOCK_DEBIT_CAP[stock] * Decimal("0.95"),
+                lot_size=STOCK_LOTS[stock],
+                earnings_today=False,
+                stock_intraday_pct=intraday_pct(srows, pct_until),
+                index_intraday_pct=intraday_pct(irows, pct_until),
+                max_trade_loss=stock_cfg.max_trade_loss,
+            )
+            if sig:
+                results.append((sig, stock, SYMBOLS[stock], "Single-Stock Momentum with Index Confirmation", Decimal("0.0040"), Decimal("2"), time(14, 30)))
+                break
+    return results
+
+
+def run_backtest(config_path: Path, start: date, end: date) -> tuple[Path, Path, list[ProxyTrade]]:
+    cfg = ensure_config(config_path)
+    cfg.validate()
+    symbols = list(SYMBOLS.values())
+    with connect_db() as conn:
+        data = fetch_candles(conn, symbols, start, end, "5")
+    data_by_symbol_day = {sym: by_day(rows) for sym, rows in data.items()}
+    all_days = sorted(set().union(*(set(days.keys()) for days in data_by_symbol_day.values())))
+    trades: list[ProxyTrade] = []
+    for day in all_days:
+        if not (start <= day <= end):
+            continue
+        for sig, underlying, underlying_symbol, name, stop_pct, target_r, exit_t in evaluate_day(day, data_by_symbol_day, all_days, cfg):
+            rows = data_by_symbol_day.get(underlying_symbol, {}).get(day, [])
+            cost = strategy_cost_rupees(sig.strategy_id)
+            trade = simulate_proxy_trade(sig, rows, strategy_name=name, underlying=underlying, underlying_symbol=underlying_symbol, stop_pct=stop_pct, target_r=target_r, time_exit=exit_t, cost_rupees=cost)
+            if trade:
+                trades.append(trade)
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = now_ist().strftime("%Y%m%d_%H%M%S")
+    csv_path = REPORT_DIR / f"nse_intraday_options_strategy_pack_proxy_trades_{stamp}.csv"
+    md_path = REPORT_DIR / f"nse_intraday_options_strategy_pack_proxy_backtest_{stamp}.md"
+    write_trades_csv(csv_path, trades)
+    write_report(md_path, trades, start, end)
+    return md_path, csv_path, trades
+
+
+def write_trades_csv(path: Path, trades: list[ProxyTrade]) -> None:
+    fields = list(asdict(trades[0]).keys()) if trades else ["strategy_id", "day", "pnl_rupees"]
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for t in trades:
+            row = {k: (str(v) if not isinstance(v, (int, float)) else v) for k, v in asdict(t).items()}
+            w.writerow(row)
+
+
+def summarize(trades: list[ProxyTrade]) -> dict[str, dict[str, Decimal | int]]:
+    out: dict[str, dict[str, Decimal | int]] = {}
+    for sid in sorted({t.strategy_id for t in trades}):
+        rows = [t for t in trades if t.strategy_id == sid]
+        pnl = sum((t.pnl_rupees for t in rows), Decimal("0"))
+        wins = sum(1 for t in rows if t.pnl_rupees > 0)
+        losses = sum(1 for t in rows if t.pnl_rupees <= 0)
+        gross_profit = sum((t.pnl_rupees for t in rows if t.pnl_rupees > 0), Decimal("0"))
+        gross_loss = -sum((t.pnl_rupees for t in rows if t.pnl_rupees < 0), Decimal("0"))
+        pf = gross_profit / gross_loss if gross_loss else Decimal("999") if gross_profit else Decimal("0")
+        avg_r = sum((t.pnl_r for t in rows), Decimal("0")) / Decimal(len(rows)) if rows else Decimal("0")
+        out[sid] = {"trades": len(rows), "wins": wins, "losses": losses, "pnl": q2(pnl), "pf": q2(pf), "avg_r": q2(avg_r)}
+    return out
+
+
+def write_report(path: Path, trades: list[ProxyTrade], start: date, end: date) -> None:
+    lines = [
+        "# NSE Intraday Options Strategy Pack — Proxy Backtest",
+        "",
+        f"Window: {start} to {end}",
+        "Mode: paper/proxy only; no live orders; option/spread legs are simulated from underlying 5-minute candles.",
+        "Cost model: ₹120 index strategy round-trip, ₹250 stock-option strategy round-trip.",
+        "",
+        "## Summary by strategy",
+    ]
+    total_pnl = sum((t.pnl_rupees for t in trades), Decimal("0"))
+    for sid, stats in summarize(trades).items():
+        lines += [
+            f"- {sid}",
+            f"  - Trades: {stats['trades']}",
+            f"  - Wins/Losses: {stats['wins']}/{stats['losses']}",
+            f"  - P&L: {money(stats['pnl'])}",
+            f"  - Profit factor: {stats['pf']}",
+            f"  - Avg R: {stats['avg_r']}",
+        ]
+    lines += ["", f"Total trades: {len(trades)}", f"Total proxy P&L: {money(q2(total_pnl))}", ""]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def upsert_campaign(conn: psycopg.Connection, cfg: StrategyPackConfig, config_path: Path) -> int:
+    raw = config_to_json_dict(cfg)
+    today = now_ist().date()
+    name = f"nse_intraday_options_pack_5x50000_{today.isoformat()}"
+    end_date = today + timedelta(days=31)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into research.strategy_pack_campaigns(name, start_date, end_date, paper_only, live_orders_enabled, active, config_sha256, notes, raw)
+            values (%s, current_date, %s, true, false, true, %s, %s, %s::jsonb)
+            on conflict(name) do update set active=true, end_date=excluded.end_date, config_sha256=excluded.config_sha256, raw=excluded.raw, updated_at=now()
+            returning campaign_id
+            """,
+            (name, end_date, sha256_file(config_path), cfg.notes, json.dumps(raw)),
+        )
+        campaign_id = int(cur.fetchone()[0])
+        for sid, strat in cfg.strategies.items():
+            cur.execute(
+                """
+                insert into research.strategy_pack_allocations(campaign_id, strategy_id, strategy_name, paper_capital, max_trade_loss, max_daily_loss, max_premium_exposure, enabled, paper_trade_enabled, raw)
+                values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
+                on conflict(campaign_id, strategy_id) do update set
+                  paper_capital=excluded.paper_capital,
+                  max_trade_loss=excluded.max_trade_loss,
+                  max_daily_loss=excluded.max_daily_loss,
+                  max_premium_exposure=excluded.max_premium_exposure,
+                  enabled=excluded.enabled,
+                  paper_trade_enabled=excluded.paper_trade_enabled,
+                  raw=excluded.raw,
+                  updated_at=now()
+                """,
+                (campaign_id, sid, strat.name, strat.paper_capital, strat.max_trade_loss, strat.max_daily_loss, strat.max_premium_exposure, strat.enabled, strat.paper_trade_enabled, json.dumps(asdict(strat), default=str)),
+            )
+    return campaign_id
+
+
+def refresh_today_history(symbols: list[str]) -> None:
+    today = now_ist().date().isoformat()
+    cmd = [sys.executable, str(PROJECT_ROOT / "scripts" / "ingest_fyers_history.py"), "--resolution", "5", "--from", today, "--to", today, "--symbols", *symbols]
+    env = os.environ.copy()
+    env.setdefault("FYERS_LOG_PATH", "/tmp/")
+    subprocess.run(cmd, cwd=PROJECT_ROOT, env=env, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def today_scan(config_path: Path, *, refresh: bool = False) -> list[tuple[StrategySignal, str, str, str, Decimal, Decimal, time]]:
+    cfg = ensure_config(config_path)
+    cfg.validate()
+    symbols = list(SYMBOLS.values())
+    if refresh:
+        refresh_today_history(symbols)
+    today = now_ist().date()
+    start = today - timedelta(days=7)
+    with connect_db() as conn:
+        data = fetch_candles(conn, symbols, start, today, "5")
+    data_by_symbol_day = {sym: by_day(rows) for sym, rows in data.items()}
+    all_days = sorted(set().union(*(set(days.keys()) for days in data_by_symbol_day.values())))
+    return evaluate_day(today, data_by_symbol_day, all_days, cfg)
+
+
+
+def todays_candles_for_symbol(conn: psycopg.Connection, symbol: str, *, after: datetime | None = None) -> list[Candle]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            select ts, open, high, low, close, volume
+            from market.candles
+            where symbol=%s and resolution='5' and ts::date=current_date
+              and (%s::timestamptz is null or ts > %s::timestamptz)
+            order by ts
+            """,
+            (symbol, after, after),
+        )
+        rows = cur.fetchall()
+    out: list[Candle] = []
+    for ts, o, h, l, c, vol in rows:
+        local_ts = ts.astimezone(IST).replace(tzinfo=None) if getattr(ts, "tzinfo", None) else ts
+        out.append(Candle(local_ts, Decimal(str(o)), Decimal(str(h)), Decimal(str(l)), Decimal(str(c)), int(vol or 0)))
+    return out
+
+
+def close_open_proxy_trades(conn: psycopg.Connection, campaign_id: int) -> list[dict[str, Any]]:
+    closed: list[dict[str, Any]] = []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            select pack_trade_id, strategy_id, underlying_symbol, direction, entry_underlying, risk_rupees,
+                   stop_underlying, target_underlying, target_r, entry_time, raw
+            from research.strategy_pack_paper_trades
+            where campaign_id=%s and status='open'
+            order by entry_time
+            """,
+            (campaign_id,),
+        )
+        rows = cur.fetchall()
+    for trade_id, sid, symbol, direction, entry, risk, stop_underlying, target_underlying, target_r, entry_time, raw in rows:
+        # Walk every candle since entry (stop-first per candle, same rules as the
+        # backtest) so stop/target touches between ticks are not missed.
+        candles = todays_candles_for_symbol(conn, symbol, after=entry_time)
+        if not candles:
+            continue
+        sign = Decimal("1") if direction in {"long", "long_ce"} else Decimal("-1")
+        stop_dec = Decimal(str(stop_underlying))
+        target_dec = Decimal(str(target_underlying))
+        entry_dec = Decimal(str(entry))
+        risk_dec = Decimal(str(risk))
+        raw_dict = raw if isinstance(raw, dict) else {}
+        # Same card exits as the backtest: close back through the broken level
+        # and the rupee premium stop, both filled at the candle close.
+        structure_level = decimal_or_none(raw_dict.get("structure_level"))
+        stop_loss_rupees = decimal_or_none(raw_dict.get("stop_loss_rupees")) or Decimal("0")
+        premium_stop_r = -(stop_loss_rupees / risk_dec) if Decimal("0") < stop_loss_rupees < risk_dec else None
+        risk_per_point = abs(entry_dec - stop_dec)
+        exit_reason = None
+        exit_candle = candles[-1]
+        pnl_r = Decimal("0")
+        for candle in candles:
+            stopped = candle.low <= stop_dec if sign > 0 else candle.high >= stop_dec
+            targeted = candle.high >= target_dec if sign > 0 else candle.low <= target_dec
+            if stopped:
+                exit_reason = "structure_stop"
+                pnl_r = Decimal("-1")
+                exit_candle = candle
+                break
+            close_r = sign * (candle.close - entry_dec) / risk_per_point if risk_per_point > 0 else Decimal("0")
+            structure_hit = structure_level is not None and (
+                candle.close < structure_level if sign > 0 else candle.close > structure_level
+            )
+            premium_hit = premium_stop_r is not None and close_r <= premium_stop_r
+            if structure_hit or premium_hit:
+                exit_reason = "structure_close_stop" if structure_hit else "premium_stop"
+                pnl_r = max(Decimal("-1"), min(Decimal(str(target_r)), close_r))
+                exit_candle = candle
+                break
+            if targeted:
+                exit_reason = "target_r"
+                pnl_r = Decimal(str(target_r))
+                exit_candle = candle
+                break
+        now_t = datetime.now(IST).time()
+        exit_t = time.fromisoformat((raw or {}).get("time_exit", "15:20")) if isinstance(raw, dict) else time(15, 20)
+        if not exit_reason and (now_t >= exit_t or now_t >= time(15, 20)):
+            move = sign * (exit_candle.close - Decimal(str(entry))) / abs(Decimal(str(entry)) - stop_dec)
+            pnl_r = max(Decimal("-1"), min(Decimal(str(target_r)), move))
+            exit_reason = "time_exit"
+        if not exit_reason:
+            continue
+        # Same round-trip cost model as the backtest so paper P&L stays comparable.
+        pnl = q2(Decimal(str(risk)) * pnl_r - strategy_cost_rupees(sid))
+        candle = exit_candle
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update research.strategy_pack_paper_trades
+                set status='closed', exit_time=now(), exit_underlying=%s, realized_pnl=%s,
+                    exit_reason=%s, updated_at=now()
+                where pack_trade_id=%s and status='open'
+                """,
+                (candle.close, pnl, exit_reason, trade_id),
+            )
+            cur.execute(
+                """
+                insert into research.strategy_pack_paper_trade_events(pack_trade_id, event_type, message, raw)
+                values (%s, 'closed', %s, %s::jsonb)
+                """,
+                (trade_id, f"Closed {sid} by {exit_reason}; proxy_pnl={pnl}", json.dumps({"candle": asdict(candle), "pnl_r": str(pnl_r)}, default=str)),
+            )
+        closed.append({"event": "closed", "trade_id": trade_id, "strategy_id": sid, "exit_reason": exit_reason, "pnl": str(pnl)})
+    return closed
+
+
+PACK_ENGINE_NAME = "nse_intraday_options_strategy_pack"
+
+
+def pack_engine_paused(conn: psycopg.Connection) -> bool:
+    """True when the dashboard control plane paused this engine.
+
+    Pausing stops new paper entries only; open proxy trades keep being managed.
+    Missing control tables (migration 015 not applied) never block the engine.
+    """
+    with conn.cursor() as cur:
+        cur.execute("select to_regclass('research.control_state')")
+        if cur.fetchone()[0] is None:
+            return False
+        cur.execute("select paused from research.control_state where engine=%s", (PACK_ENGINE_NAME,))
+        row = cur.fetchone()
+        return bool(row and row[0])
+
+
+def proxy_force_exit_pnl_r(*, direction: str, exit_underlying: Decimal, entry: Decimal, stop: Decimal, target_r: Decimal) -> Decimal:
+    """Proxy R multiple for an operator-requested flatten — same clamp as the
+    scheduled exit paths: floor -1R at the stop, ceiling target_r."""
+    sign = Decimal("1") if direction in {"long", "long_ce"} else Decimal("-1")
+    risk_points = abs(entry - stop)
+    if risk_points == 0:
+        return Decimal("0")
+    move = sign * (exit_underlying - entry) / risk_points
+    return max(Decimal("-1"), min(target_r, move))
+
+
+def apply_force_exit_requests(conn: psycopg.Connection, campaign_id: int) -> list[dict[str, Any]]:
+    """Claim today's pending dashboard force-exit requests and close those trades.
+
+    Closes at the latest stored 5m candle close (entry price when no candle
+    exists, i.e. breakeven before costs), with the same cost model as every
+    other exit. Requests for trades that are not open in this campaign are
+    rejected. Requests from previous IST days are never claimed; the control
+    applier expires those.
+    """
+    with conn.cursor() as cur:
+        cur.execute("select to_regclass('research.control_requests')")
+        if cur.fetchone()[0] is None:
+            return []
+        cur.execute(
+            """
+            select request_id, payload
+            from research.control_requests
+            where engine = %s and action_type = 'force_exit' and status = 'pending'
+              and (requested_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date
+            order by requested_at, request_id
+            for update skip locked
+            """,
+            (PACK_ENGINE_NAME,),
+        )
+        requests = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for request_id, payload in requests:
+        payload = payload if isinstance(payload, dict) else {}
+        trade_id: int | None
+        try:
+            trade_id = int(payload.get("trade_id"))
+        except (TypeError, ValueError):
+            trade_id = None
+        status, message = "rejected", f"invalid trade_id {payload.get('trade_id')!r}"
+        if trade_id is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select strategy_id, underlying_symbol, direction, entry_underlying, risk_rupees,
+                           stop_underlying, target_r, entry_time
+                    from research.strategy_pack_paper_trades
+                    where pack_trade_id=%s and campaign_id=%s and status='open'
+                    for update
+                    """,
+                    (trade_id, campaign_id),
+                )
+                trade = cur.fetchone()
+            if trade is None:
+                status, message = "rejected", f"trade {trade_id} is not an open paper trade of this campaign"
+            else:
+                sid, symbol, direction, entry, risk, stop_underlying, target_r, entry_time = trade
+                candles = todays_candles_for_symbol(conn, symbol, after=entry_time)
+                exit_underlying = candles[-1].close if candles else Decimal(str(entry))
+                pnl_r = proxy_force_exit_pnl_r(
+                    direction=str(direction),
+                    exit_underlying=exit_underlying,
+                    entry=Decimal(str(entry)),
+                    stop=Decimal(str(stop_underlying)),
+                    target_r=Decimal(str(target_r)),
+                )
+                pnl = q2(Decimal(str(risk)) * pnl_r - strategy_cost_rupees(sid))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        update research.strategy_pack_paper_trades
+                        set status='closed', exit_time=now(), exit_underlying=%s, realized_pnl=%s,
+                            exit_reason='manual_force_exit', updated_at=now()
+                        where pack_trade_id=%s and status='open'
+                        """,
+                        (exit_underlying, pnl, trade_id),
+                    )
+                    cur.execute(
+                        """
+                        insert into research.strategy_pack_paper_trade_events(pack_trade_id, event_type, message, raw)
+                        values (%s, 'closed', %s, %s::jsonb)
+                        """,
+                        (trade_id, f"Closed {sid} by manual_force_exit from the dashboard; proxy_pnl={pnl}", json.dumps({"pnl_r": str(pnl_r), "exit_underlying": str(exit_underlying), "had_candle": bool(candles)}, default=str)),
+                    )
+                status = "applied"
+                message = f"closed trade {trade_id} at underlying {exit_underlying}; proxy P&L {pnl}"
+                out.append({"event": "closed", "trade_id": trade_id, "strategy_id": sid, "exit_reason": "manual_force_exit", "pnl": str(pnl)})
+        with conn.cursor() as cur:
+            cur.execute(
+                "update research.control_requests set status=%s, processed_at=now(), result_message=%s where request_id=%s",
+                (status, message, request_id),
+            )
+    return out
+
+
+def stop_target_from_signal(sig: StrategySignal, stop_pct: Decimal, target_r: Decimal) -> tuple[Decimal, Decimal]:
+    sign = Decimal("1") if sig.direction in {"long", "long_ce"} else Decimal("-1")
+    stop = sig.underlying_entry * (Decimal("1") - sign * stop_pct)
+    target = sig.underlying_entry * (Decimal("1") + sign * stop_pct * target_r)
+    return q2(stop), q2(target)
+
+
+def entry_window_open(now: datetime, cfg: StrategyPackConfig) -> bool:
+    """No new paper entries before no_new_entries_before or at/after force_exit_time."""
+    t = now.time()
+    return time.fromisoformat(cfg.no_new_entries_before) <= t < time.fromisoformat(cfg.force_exit_time)
+
+
+def signal_is_fresh(entry_time: datetime, now: datetime, *, max_age: timedelta = SIGNAL_MAX_AGE) -> bool:
+    """A signal may only open a paper trade close to when its candle printed.
+
+    today_scan re-detects the first qualifying candle of the whole day, so a
+    tick running hours later must not record that stale price as a fill.
+    """
+    age = now - entry_time
+    return timedelta(0) <= age <= max_age
+
+
+def run_tick(config_path: Path, *, dry_run: bool = False, refresh: bool = False) -> list[dict[str, Any]]:
+    cfg = ensure_config(config_path)
+    cfg.validate()
+    out: list[dict[str, Any]] = []
+    if refresh:
+        refresh_today_history(list(SYMBOLS.values()))
+    with connect_db() as conn:
+        campaign_id = upsert_campaign(conn, cfg, config_path)
+        if not dry_run:
+            out.extend(close_open_proxy_trades(conn, campaign_id))
+            out.extend(apply_force_exit_requests(conn, campaign_id))
+        if pack_engine_paused(conn) and not dry_run:
+            # Paused via the dashboard control plane: open trades were just
+            # managed above, but no new paper entries may open.
+            return out
+        signals = today_scan(config_path, refresh=False)
+        for sig, underlying, underlying_symbol, name, stop_pct, target_r, exit_t in signals:
+            stop_u, target_u = stop_target_from_signal(sig, stop_pct, target_r)
+            payload = {
+                "event": "signal",
+                "strategy_id": sig.strategy_id,
+                "strategy_name": name,
+                "underlying": underlying,
+                "direction": sig.direction,
+                "structure": sig.structure,
+                "entry_time": sig.entry_time.isoformat(),
+                "entry_underlying": str(sig.underlying_entry),
+                "stop_underlying": str(stop_u),
+                "target_underlying": str(target_u),
+                "reason": sig.reason,
+                "dry_run": dry_run,
+            }
+            if dry_run:
+                out.append(payload)
+                continue
+            strat = runnable_strategy(cfg, sig.strategy_id)
+            if strat is None:
+                continue
+            now_local = now_ist().replace(tzinfo=None)
+            if not entry_window_open(now_local, cfg):
+                continue
+            if not signal_is_fresh(sig.entry_time, now_local):
+                continue
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select
+                      count(*) filter (where strategy_id=%s and entry_time::date=current_date and status in ('open','closed')) as trades_today,
+                      count(*) filter (where strategy_id=%s and status='open') as open_now,
+                      count(*) filter (where status='open') as open_global,
+                      coalesce(sum(realized_pnl) filter (where strategy_id=%s and status='closed' and exit_time::date=current_date), 0) as realized_today,
+                      count(*) filter (where strategy_id=%s and entry_time=%s) as same_signal
+                    from research.strategy_pack_paper_trades
+                    where campaign_id=%s
+                    """,
+                    (sig.strategy_id, sig.strategy_id, sig.strategy_id, sig.strategy_id, sig.entry_time, campaign_id),
+                )
+                trades_today, open_now, open_global, realized_today, same_signal = cur.fetchone()
+                if int(same_signal or 0) > 0:
+                    continue
+                if int(open_now or 0) >= strat.max_open_positions:
+                    continue
+                if int(open_global or 0) >= cfg.global_max_open_positions:
+                    continue
+                if int(trades_today or 0) >= strat.max_trades_per_day:
+                    continue
+                if Decimal(str(realized_today or 0)) <= -strat.max_daily_loss:
+                    continue
+                raw = dict(sig.metadata)
+                raw.update({"stop_pct": str(stop_pct), "target_r": str(target_r), "time_exit": exit_t.isoformat(), "proxy_paper": True, "stop_loss_rupees": str(sig.stop_loss_rupees)})
+                cur.execute(
+                    """
+                    insert into research.strategy_pack_paper_trades(
+                      campaign_id, strategy_id, strategy_name, underlying, underlying_symbol, direction, structure, status,
+                      signal_reason, entry_time, entry_underlying, risk_rupees, max_loss_rupees, target_r,
+                      stop_underlying, target_underlying, paper_only, live_orders_enabled, raw
+                    ) values (%s,%s,%s,%s,%s,%s,%s,'open',%s,%s,%s,%s,%s,%s,%s,%s,true,false,%s::jsonb)
+                    returning pack_trade_id
+                    """,
+                    (campaign_id, sig.strategy_id, name, underlying, underlying_symbol, sig.direction, sig.structure, sig.reason, sig.entry_time, sig.underlying_entry, sig.max_loss_rupees, sig.max_loss_rupees, target_r, stop_u, target_u, json.dumps(raw, default=str)),
+                )
+                trade_id = cur.fetchone()[0]
+                cur.execute(
+                    """
+                    insert into research.strategy_pack_paper_trade_events(pack_trade_id, event_type, message, raw)
+                    values (%s, 'opened', %s, %s::jsonb)
+                    """,
+                    (trade_id, f"Opened {sig.strategy_id} proxy paper trade", json.dumps(raw, default=str)),
+                )
+                payload["event"] = "opened"
+                payload["trade_id"] = trade_id
+                out.append(payload)
+    return out
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--mode", choices=["init-config", "init-campaign", "backtest", "scan", "tick"], default="scan")
+    parser.add_argument("--from", dest="start", default="2026-02-01")
+    parser.add_argument("--to", dest="end", default=now_ist().date().isoformat())
+    parser.add_argument("--refresh", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    if args.mode == "init-config":
+        save_default_config(args.config)
+        print(f"WROTE {args.config}")
+        return
+    cfg = ensure_config(args.config)
+    if args.mode == "init-campaign":
+        with connect_db() as conn:
+            campaign_id = upsert_campaign(conn, cfg, args.config)
+        print(f"UPSERTED campaign_id={campaign_id}; paper_only={cfg.paper_only}; live_orders_enabled={cfg.live_orders_enabled}")
+        return
+    if args.mode == "backtest":
+        md, csv_path, trades = run_backtest(args.config, date.fromisoformat(args.start), date.fromisoformat(args.end))
+        print(f"WROTE {md}")
+        print(f"WROTE {csv_path}")
+        print(json.dumps({sid: {k: str(v) for k, v in stats.items()} for sid, stats in summarize(trades).items()}, indent=2))
+        return
+    if args.mode == "scan":
+        signals = today_scan(args.config, refresh=args.refresh)
+        if not signals:
+            print("NO_SIGNAL paper-only strategy pack scan")
+        for sig, underlying, _symbol, name, *_ in signals:
+            print(json.dumps({"strategy_id": sig.strategy_id, "strategy_name": name, "underlying": underlying, "direction": sig.direction, "structure": sig.structure, "entry_time": sig.entry_time.isoformat(), "reason": sig.reason}, default=str))
+        return
+    if args.mode == "tick":
+        rows = run_tick(args.config, dry_run=args.dry_run, refresh=args.refresh)
+        if not rows:
+            print("NO_CHANGE paper-only strategy pack tick")
+        else:
+            print(json.dumps(rows, indent=2, default=str))
+        return
+
+
+if __name__ == "__main__":
+    main()

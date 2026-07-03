@@ -1,0 +1,27 @@
+{
+  "strategy_name": "long_options_volatility_greeks_gate_v1",
+  "title": "Long Options Volatility and Greeks Gate v1",
+  "hypothesis": "Long-option entries should be blocked or downsized when IV, spread, or premium stop geometry makes net loss exceed the configured risk cap.",
+  "target_universe": "NIFTY/BANKNIFTY options overlays",
+  "timeframe": "pre-entry + monitor overlay",
+  "expected_edge": "Reduces avoidable losses from high premium, IV crush, stale quotes, and gap/slippage conditions.",
+  "config": {
+    "paper_only": true,
+    "live_orders_enabled": false,
+    "max_net_loss_per_trade": 1500,
+    "cost_aware": true
+  },
+  "status": "research_spec_ready_for_backtest",
+  "safety": {
+    "paper_only": true,
+    "live_orders_enabled": false,
+    "requires_explicit_live_order_confirmation": true
+  },
+  "validation_plan": [
+    "compile deterministic strategy",
+    "unit-test entry/exit/risk gates",
+    "proxy backtest",
+    "paper run",
+    "manual review"
+  ]
+}

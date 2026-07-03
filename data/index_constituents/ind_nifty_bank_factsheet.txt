@@ -1,0 +1,132 @@
+May 29, 2026
+The Nifty Bank Index comprises of the most liquid and large Indian Banking stocks. It provides investors and market intermediaries a
+benchmark that captures the capital market performance of the Indian banks. The Index comprises of maximum 14 companies listed
+on National Stock Exchange of India (NSE).
+Nifty Bank Index is computed using free float market capitalization method.
+Nifty Bank Index can be used for a variety of purposes such as benchmarking fund portfolios, launching of index funds, ETFs and
+structured products.
+Index Variant: Nifty Bank Total Returns Index.
+Portfolio Characteristics
+Periodic Capped Free Float
+Launch Date
+Base Date
+1000
+14
+Base Value
+Real-Time
+January 01, 2000
+Calculation Frequency
+No. of Constituents
+Methodology
+Semi-AnnuallyIndex Rebalancing
+September 15, 2003
+Price Return 7.88 -8.97 -2.71 16.318.83
+Std. Deviation * 16.99 28.08
+1.08
+0.92 0.87
+15.91
+1.09
+Correlation (NIFTY 50)
+1.13
+0.84
+Beta (NIFTY 50)
+Fundamentals
+Dividend Yield
+1.85
+P/E
+13.69 1.1
+P/B
+1 Year Performance Comparison of Sector Indices
+ 
+Company’s Name Weight(%)
+Top constituents by weightage
+HDFC Bank Ltd. 17.93
+ICICI Bank Ltd. 13.63
+Axis Bank Ltd. 10.28
+Kotak Mahindra Bank Ltd. 9.81
+State Bank of India 9.07
+Federal Bank Ltd. 6.38
+IndusInd Bank Ltd. 5.40
+AU Small Finance Bank Ltd. 4.87
+Bank of Baroda 4.47
+IDFC First Bank Ltd. 4.27
+# QTD,YTD and 1 year returns are absolute returns.Returns for greater than one year are CAGR returns.
+* Average daily standard deviation annualised
+Disclaimer: All information contained herewith is provided for reference purpose only. NSE Indices Limited (formerly known as India Index Services & Products Limited-IISL) ensures accuracy
+and reliability of the above information to the best of its endeavors. However, NSE Indices Limited makes no warranty or representation as to the accuracy, completeness or reliability of any of
+the information contained herein and disclaim any and all liability whatsoever to any person for any damage or loss of any nature arising from or as a result of reliance on any of the information
+provided herein. The information contained in this document is not intended to provide any professional advice.
+1 YearYTDQTD 5 Years Since
+Inception
+5 Years Since
+Inception1 Year
+1
+8.06 17.79Total Return
+Index
+Returns (%) #
+Statistics ##
+## Based on Price Return Index.
+-1.94 9.67-8.82
+May 29, 2026
+ 
+Bloomberg - NSEBANK Index
+Thomson Reuters - .NSEBANK
+Contact Us:
+Email: indices@nse.co.in | Tel: +91 22 26598386 | Fax: +91 22 26598120
+Nifty 500
+Nifty 50
+Nifty Midcap 50
+Nifty 200
+Nifty Next 50
+Nifty Midcap 100
+Nifty 100
+Nifty Bank
+Nifty IT
+Nifty Financial Services
+Nifty FMCG
+Nifty Private Bank
+Nifty Metal
+Nifty PSU Bank
+Nifty Shariah 25
+Nifty Corporate Group
+Nifty Energy
+Nifty 100 Liquid15
+Nifty CPSE
+Nifty Commodities
+Nifty Infrastructure
+Nifty Alpha 50
+Nifty100 Quality 30
+Nifty50 PR 2x Leverage
+Nifty Low Volatility 50
+Nifty50 Value 20
+Nifty100 Equal Weight
+Nifty50 PR 1x Inverse
+Nifty Composite G-Sec
+Nifty 8-13 yr G-Sec
+Nifty 10 yr Benchmark G-Sec
+Nifty 4-8 yr G-Sec
+Nifty 1D Rate
+Nifty 15 yr and above G-Sec
+Nifty 11-15 yr G-Sec
+Eligibility Criteria for Selection of Constituent Stocks:
+i. Companies should form part of Nifty 500 at the time of review. In case, the number of eligible stocks representing a particular sector
+within Nifty 500 falls below 10, then deficit number of stocks shall be selected from the universe of stocks ranked within top 800
+based on both average daily turnover and average daily full market capitalisation based on previous six months period data used for
+index rebalancing of Nifty 500.
+ii. Companies should form a part of the Banking sector.
+iii. The company's trading frequency should be at least 90% in the last six months.
+iv. The Company should have a minimum listing history of 1 month as on the cutoff date.
+v. Preference is given to companies that are allowed to trade in F&O segment to be constituent of the index.
+vi. Final selection of 14 companies shall be done based on the free-float market capitalization of the companies.
+Index Re-Balancing:
+Index is re-balanced on semi-annual basis. The cut-off date is January 31 and July 31 of each year, i.e. For semi-annual review of
+indices, average data for six months ending the cut-off date is considered. Four weeks prior notice is given to market from the date of
+change.
+Index Governance:
+A professional team manages all NSE indices. There is a three-tier governance structure comprising the Board of Directors of NSE
+Indices Limited, the Index Advisory Committee (Equity) and the Index Maintenance Sub-Committee.
+Thematic IndicesSectoral Indices Strategy Indices Fixed IncomeBroad Market Indices
+Index Methodology
+Key Indices
+2
+Learn more at: www.niftyindices.com

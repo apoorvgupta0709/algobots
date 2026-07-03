@@ -1,0 +1,7 @@
+variant,ratchet_giveback_min_inr,ratchet_giveback_pct,ratchet_start_r,trades,win_rate_pct,total_pnl,expectancy_r,avg_mfe_capture_pct,max_drawdown,days_hit_5k_cap,passes_all
+baseline_min600_pct35_start1_0,600,35,1.0,115,86.96,101164.69,1.22,48.87,-5543.57,0,False
+mild_min400_pct35_start1_0,400,35,1.0,115,86.09,102751.31,1.23,52.67,-5543.57,0,False
+balanced_min300_pct30_start1_0,300,30,1.0,116,85.34,100870.76,1.20,56.49,-5543.57,0,True
+tight_min250_pct25_start1_0,250,25,1.0,118,83.90,95654.01,1.11,59.80,-5543.57,0,True
+early_min300_pct30_start0_9,300,30,0.9,117,85.47,98338.76,1.18,57.71,-5543.57,0,True
+fixedish_min400_pct0_35_start1_0,400,0.35,1.0,116,85.34,106620.56,1.32,60.64,-5543.57,0,True

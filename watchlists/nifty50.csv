@@ -1,0 +1,55 @@
+# NIFTY 50 watchlist
+# Source: official NSE/Nifty Indices constituent CSV downloaded from niftyindices.com
+# FYERS-tradable list excludes official dummy constituents that FYERS history rejects: NIFTYNEXT50:DUMMYVEDL1, NIFTYNEXT50:DUMMYVEDL2, NIFTYNEXT50:DUMMYVEDL3, NIFTYNEXT50:DUMMYVEDL4
+# Columns: symbol,fyers_symbol,company,sector,basket,notes
+symbol,fyers_symbol,company,sector,basket,notes
+ADANIENT,NSE:ADANIENT-EQ,Adani Enterprises Ltd.,Metals & Mining,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ADANIPORTS,NSE:ADANIPORTS-EQ,Adani Ports and Special Economic Zone Ltd.,Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+APOLLOHOSP,NSE:APOLLOHOSP-EQ,Apollo Hospitals Enterprise Ltd.,Healthcare,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ASIANPAINT,NSE:ASIANPAINT-EQ,Asian Paints Ltd.,Consumer Durables,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+AXISBANK,NSE:AXISBANK-EQ,Axis Bank Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+BAJAJ-AUTO,NSE:BAJAJ-AUTO-EQ,Bajaj Auto Ltd.,Automobile and Auto Components,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+BAJFINANCE,NSE:BAJFINANCE-EQ,Bajaj Finance Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+BAJAJFINSV,NSE:BAJAJFINSV-EQ,Bajaj Finserv Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+BEL,NSE:BEL-EQ,Bharat Electronics Ltd.,Capital Goods,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+BHARTIARTL,NSE:BHARTIARTL-EQ,Bharti Airtel Ltd.,Telecommunication,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+CIPLA,NSE:CIPLA-EQ,Cipla Ltd.,Healthcare,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+COALINDIA,NSE:COALINDIA-EQ,Coal India Ltd.,Oil Gas & Consumable Fuels,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+DRREDDY,NSE:DRREDDY-EQ,Dr. Reddy's Laboratories Ltd.,Healthcare,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+EICHERMOT,NSE:EICHERMOT-EQ,Eicher Motors Ltd.,Automobile and Auto Components,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ETERNAL,NSE:ETERNAL-EQ,Eternal Ltd.,Consumer Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+GRASIM,NSE:GRASIM-EQ,Grasim Industries Ltd.,Construction Materials,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+HCLTECH,NSE:HCLTECH-EQ,HCL Technologies Ltd.,Information Technology,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+HDFCBANK,NSE:HDFCBANK-EQ,HDFC Bank Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+HDFCLIFE,NSE:HDFCLIFE-EQ,HDFC Life Insurance Company Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+HINDALCO,NSE:HINDALCO-EQ,Hindalco Industries Ltd.,Metals & Mining,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+HINDUNILVR,NSE:HINDUNILVR-EQ,Hindustan Unilever Ltd.,Fast Moving Consumer Goods,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ICICIBANK,NSE:ICICIBANK-EQ,ICICI Bank Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ITC,NSE:ITC-EQ,ITC Ltd.,Fast Moving Consumer Goods,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+INFY,NSE:INFY-EQ,Infosys Ltd.,Information Technology,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+INDIGO,NSE:INDIGO-EQ,InterGlobe Aviation Ltd.,Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+JSWSTEEL,NSE:JSWSTEEL-EQ,JSW Steel Ltd.,Metals & Mining,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+JIOFIN,NSE:JIOFIN-EQ,Jio Financial Services Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+KOTAKBANK,NSE:KOTAKBANK-EQ,Kotak Mahindra Bank Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+LT,NSE:LT-EQ,Larsen & Toubro Ltd.,Construction,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+M&M,NSE:M&M-EQ,Mahindra & Mahindra Ltd.,Automobile and Auto Components,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+MARUTI,NSE:MARUTI-EQ,Maruti Suzuki India Ltd.,Automobile and Auto Components,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+MAXHEALTH,NSE:MAXHEALTH-EQ,Max Healthcare Institute Ltd.,Healthcare,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+NTPC,NSE:NTPC-EQ,NTPC Ltd.,Power,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+NESTLEIND,NSE:NESTLEIND-EQ,Nestle India Ltd.,Fast Moving Consumer Goods,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ONGC,NSE:ONGC-EQ,Oil & Natural Gas Corporation Ltd.,Oil Gas & Consumable Fuels,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+POWERGRID,NSE:POWERGRID-EQ,Power Grid Corporation of India Ltd.,Power,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+RELIANCE,NSE:RELIANCE-EQ,Reliance Industries Ltd.,Oil Gas & Consumable Fuels,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+SBILIFE,NSE:SBILIFE-EQ,SBI Life Insurance Company Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+SHRIRAMFIN,NSE:SHRIRAMFIN-EQ,Shriram Finance Ltd.,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+SBIN,NSE:SBIN-EQ,State Bank of India,Financial Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+SUNPHARMA,NSE:SUNPHARMA-EQ,Sun Pharmaceutical Industries Ltd.,Healthcare,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TCS,NSE:TCS-EQ,Tata Consultancy Services Ltd.,Information Technology,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TATACONSUM,NSE:TATACONSUM-EQ,Tata Consumer Products Ltd.,Fast Moving Consumer Goods,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TMPV,NSE:TMPV-EQ,Tata Motors Passenger Vehicles Ltd.,Automobile and Auto Components,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TATASTEEL,NSE:TATASTEEL-EQ,Tata Steel Ltd.,Metals & Mining,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TECHM,NSE:TECHM-EQ,Tech Mahindra Ltd.,Information Technology,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TITAN,NSE:TITAN-EQ,Titan Company Ltd.,Consumer Durables,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+TRENT,NSE:TRENT-EQ,Trent Ltd.,Consumer Services,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+ULTRACEMCO,NSE:ULTRACEMCO-EQ,UltraTech Cement Ltd.,Construction Materials,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
+WIPRO,NSE:WIPRO-EQ,Wipro Ltd.,Information Technology,NIFTY50,Official NSE index constituent source=ind_nifty50list.csv; FYERS-tradable universe excludes dummy constituents
