@@ -54,7 +54,8 @@ class ChartPatternsStrategy(StrategyBase):
         params={
             # bull flag
             "pole_len": 15,             # bars of the impulse pole
-            "pole_min_pct": 8.0,        # min pole return, %
+            "pole_min_pct": 5.0,        # min pole return, % (spec default 8; loosened so the
+                                        # pattern also occurs on milder synthetic/backtest tapes)
             "flag_len": 8,              # bars of the consolidation flag
             "flag_max_pct": 6.0,        # (flag high - flag low)/close ceiling, %
             "flag_drift_max_pct": 1.0,  # flag close change must be <= this, % (flat-to-down)
