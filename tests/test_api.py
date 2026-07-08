@@ -14,6 +14,7 @@ import tempfile
 _TMPDIR = tempfile.mkdtemp(prefix="algobot-api-test-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMPDIR}/test.db"
 os.environ["ALGOBOT_API_DISABLE_WORKER"] = "1"
+os.environ["ALGOBOT_API_KEY"] = "test-key"
 
 import pytest
 
@@ -130,7 +131,9 @@ def _seed() -> None:
 @pytest.fixture(scope="module")
 def client():
     app = create_app(start_worker=False)
-    with TestClient(app) as c:   # context manager runs lifespan -> init_db()
+    # X-API-Key on every request; GET routes simply ignore it.
+    with TestClient(app, headers={"X-API-Key": "test-key"}) as c:
+        # context manager runs lifespan -> init_db()
         _seed()
         yield c
 
@@ -424,3 +427,33 @@ def test_killswitch_via_queue(client, worker):
                    {"type": "killswitch", "params": {"on": False}})
     assert job["status"] == "done"
     assert _kill_state()[0] is False
+
+
+# =========================================================================== auth
+def test_control_route_requires_api_key(client):
+    bare = client.post("/killswitch", json={"on": False},
+                       headers={"X-API-Key": ""})
+    assert bare.status_code == 401
+    wrong = client.post("/killswitch", json={"on": False},
+                        headers={"X-API-Key": "wrong-key"})
+    assert wrong.status_code == 401
+
+
+def test_post_queries_requires_api_key(client):
+    r = client.post("/queries", json={"type": "pnl"},
+                    headers={"X-API-Key": "wrong-key"})
+    assert r.status_code == 401
+
+
+def test_reads_do_not_require_api_key(client):
+    r = client.get("/status", headers={"X-API-Key": ""})
+    assert r.status_code == 200
+    r = client.get("/queries", headers={"X-API-Key": ""})
+    assert r.status_code == 200
+
+
+def test_control_routes_disabled_without_configured_key(client, monkeypatch):
+    monkeypatch.delenv("ALGOBOT_API_KEY", raising=False)
+    r = client.post("/killswitch", json={"on": False})
+    assert r.status_code == 503
+    assert "ALGOBOT_API_KEY" in str(r.json()["detail"])

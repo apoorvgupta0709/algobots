@@ -52,9 +52,12 @@ def create_app(start_worker: bool = True) -> FastAPI:
             worker.stop()
 
     app = FastAPI(title="AlgoBot API", version=API_VERSION, lifespan=lifespan)
+    # Loopback-only deployment; no wildcard origins and no credentialed CORS.
+    # State-changing routes additionally require X-API-Key (algobot.api.auth).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"], allow_credentials=True,
+        allow_origins=["http://127.0.0.1:8501", "http://localhost:8501"],
+        allow_credentials=False,
         allow_methods=["*"], allow_headers=["*"],
     )
     app.include_router(read_router)

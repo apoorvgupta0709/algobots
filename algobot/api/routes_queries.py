@@ -10,9 +10,10 @@ import datetime as dt
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
+from algobot.api.auth import require_api_key
 from algobot.api.readers import DEFAULT_LIMIT, MAX_LIMIT
 from algobot.persistence.db import session_scope
 from algobot.persistence.schema import QueryJobRow
@@ -47,7 +48,9 @@ def _job_dict(row: QueryJobRow) -> dict:
     }
 
 
-@router.post("", status_code=202)
+# POST is key-protected: the worker executes control job types (promote/
+# killswitch) through the same do_* helpers as the control routes.
+@router.post("", status_code=202, dependencies=[Depends(require_api_key)])
 def enqueue_query(body: QueryCreate) -> dict:
     """Enqueue a query job; poll the returned URL for the answer."""
     job_id = str(uuid.uuid4())

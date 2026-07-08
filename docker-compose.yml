@@ -7,7 +7,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: algobot
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-algobot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: algobot
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -25,7 +25,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg2://algobot:${POSTGRES_PASSWORD:-algobot}@db:5432/algobot
+      DATABASE_URL: postgresql+psycopg2://algobot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/algobot
       TZ: Asia/Kolkata
     volumes:
       - marketdata:/app/data
@@ -41,10 +41,10 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg2://algobot:${POSTGRES_PASSWORD:-algobot}@db:5432/algobot
+      DATABASE_URL: postgresql+psycopg2://algobot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/algobot
       TZ: Asia/Kolkata
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"   # loopback only; use an SSH tunnel for remote access
     volumes:
       - marketdata:/app/data
     depends_on:
@@ -59,11 +59,11 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg2://algobot:${POSTGRES_PASSWORD:-algobot}@db:5432/algobot
+      DATABASE_URL: postgresql+psycopg2://algobot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/algobot
       ALGOBOT_API_URL: http://api:8000
       TZ: Asia/Kolkata
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"   # loopback only; use an SSH tunnel for remote access
     volumes:
       - marketdata:/app/data
     depends_on:

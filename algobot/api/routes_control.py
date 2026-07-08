@@ -14,16 +14,18 @@ from __future__ import annotations
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from algobot.api import readers
+from algobot.api.auth import require_api_key
 from algobot.core.enums import Mode
 from algobot.core.exceptions import GateError
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(tags=["control"])
+# Every control route changes platform state -> X-API-Key required.
+router = APIRouter(tags=["control"], dependencies=[Depends(require_api_key)])
 
 
 # --------------------------------------------------------------------------- errors
