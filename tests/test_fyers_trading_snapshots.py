@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -30,6 +33,9 @@ def test_mask_account_ref_does_not_echo_full_identifier() -> None:
     assert snapshots.mask_account_ref("FY1234567890") == "FY********90"
 
 
+@pytest.mark.skipif(os.geteuid() == 0,
+                    reason="root ignores file permissions; chmod 0o400 cannot "
+                           "make the file unwritable")
 def test_normalize_log_path_falls_back_when_existing_sdk_log_file_is_not_writable(tmp_path) -> None:
     bad_dir = tmp_path / "bad-logs"
     bad_dir.mkdir()

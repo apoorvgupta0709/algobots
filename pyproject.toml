@@ -32,31 +32,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov"]
 
+# uv-native dev group so `uv sync --group dev` works (CLAUDE.md command);
+# the optional-dependencies extra above stays for pip users.
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-cov"]
+
 [tool.setuptools.packages.find]
 include = ["algobot*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Sibling-project tests (they import scripts/dashboard code with their own deps
-# like psycopg). This platform's suite is the tests/test_* files listed in git
-# under this project; ignore the sibling ones so `pytest` runs clean.
-addopts = """-q \
---ignore=tests/test_apply_control_requests.py \
---ignore=tests/test_banknifty_options_dashboard.py \
---ignore=tests/test_banknifty_options_paper.py \
---ignore=tests/test_banknifty_pullback_v2_backtest.py \
---ignore=tests/test_daily_market_report.py \
---ignore=tests/test_deep_research_context.py \
---ignore=tests/test_fts_swing_backtest.py \
---ignore=tests/test_fyers_history_validation.py \
---ignore=tests/test_fyers_trading_snapshots.py \
---ignore=tests/test_live_order_gate.py \
---ignore=tests/test_morning_stock_recommendations.py \
---ignore=tests/test_options_chain_ingest.py \
---ignore=tests/test_paper_algobot.py \
---ignore=tests/test_paper_portfolio_report.py \
---ignore=tests/test_structure_fundamental_sentiment_evidence.py \
---ignore=tests/test_technical_factors.py \
---ignore=tests/test_trading_research_schema.py \
---ignore=tests/test_watchlist_daily_report.py \
---ignore=tests/test_nse_intraday_options_strategy_pack.py"""
+# One unified suite: algobot platform tests AND the legacy finance-db safety
+# rails. Tests that need the live finance-db Postgres self-skip via the
+# requires_finance_db marker in tests/conftest.py.
+addopts = "-q"

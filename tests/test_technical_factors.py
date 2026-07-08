@@ -11,8 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts import compute_technical_factors as factors
+from tests.conftest import FINANCE_DATABASE_URL, requires_finance_db
 
-DATABASE_URL = "postgresql://hermes@127.0.0.1:55432/finance_tracker"
+DATABASE_URL = FINANCE_DATABASE_URL
 
 
 def make_candles(count: int, symbol: str = "NSE:FACTORTEST-EQ") -> list[factors.Candle]:
@@ -122,6 +123,7 @@ def test_compute_latest_snapshot_requires_enough_candles() -> None:
         raise AssertionError("expected ValueError for insufficient history")
 
 
+@requires_finance_db
 def test_store_factor_snapshots_upserts_into_research_factor_snapshots() -> None:
     candles = make_candles(60, symbol="NSE:FACTORDBTEST-EQ")
     snapshot = factors.compute_latest_snapshot(candles)

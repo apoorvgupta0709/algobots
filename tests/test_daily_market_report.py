@@ -14,8 +14,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts import generate_daily_market_report as report
+from tests.conftest import FINANCE_DATABASE_URL, requires_finance_db
 
-DATABASE_URL = "postgresql://hermes@127.0.0.1:55432/finance_tracker"
+DATABASE_URL = FINANCE_DATABASE_URL
 
 def sample_row(**overrides):
     base = report.ReportRow(
@@ -189,6 +190,7 @@ def test_render_report_handles_no_rows() -> None:
     assert "No factor snapshots found" in text
 
 
+@requires_finance_db
 def test_fetch_report_rows_with_symbol_filter_uses_valid_query() -> None:
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
@@ -240,6 +242,7 @@ def test_fetch_report_rows_with_symbol_filter_uses_valid_query() -> None:
         conn.commit()
 
 
+@requires_finance_db
 def test_fetch_report_rows_filters_requested_resolution() -> None:
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:

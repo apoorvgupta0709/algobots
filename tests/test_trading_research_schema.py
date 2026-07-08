@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import psycopg
 
+from tests.conftest import FINANCE_DATABASE_URL, requires_finance_db
+
+pytestmark = requires_finance_db
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = PROJECT_ROOT / "migrations" / "001_trading_research_schemas.sql"
 CONTROL_PLANE_MIGRATION = PROJECT_ROOT / "migrations" / "015_control_plane.sql"
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://hermes@127.0.0.1:55432/finance_tracker")
+# FINANCE_DATABASE_URL, not DATABASE_URL: algobot test modules repoint
+# DATABASE_URL at sqlite, which psycopg cannot connect to.
+DATABASE_URL = FINANCE_DATABASE_URL
 
 
 def test_trading_research_migration_creates_required_schemas_tables_and_views() -> None:
