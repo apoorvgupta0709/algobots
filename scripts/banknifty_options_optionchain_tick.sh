@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/data/finance-db
+cd "$(dirname "$0")/.."
 
 # Ingest BankNifty + Nifty option-chain snapshots during market hours. Read-only
 # market data; no order placement. Runs alongside the paper monitor so greeks/IV/OI

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/data/finance-db
+cd "$(dirname "$0")/.."
 # Script-only paper/proxy monitor. No LLM. No live broker orders.
 # Exits quietly outside NSE market window or weekends.
 DOW=$(TZ=Asia/Kolkata date +%u)

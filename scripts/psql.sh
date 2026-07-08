@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source /opt/data/finance-db/scripts/pg-env.sh
+source "$(dirname "$0")/pg-env.sh"
 exec "$PGBIN/psql" "$@"

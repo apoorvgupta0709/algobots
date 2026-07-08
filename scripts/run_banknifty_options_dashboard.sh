@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/data/finance-db
+cd "$(dirname "$0")/.."
 
 # Read-only dashboard. Bind to loopback by default; use SSH tunnel/VPN/reverse proxy with auth.
 # Example SSH tunnel from your laptop:

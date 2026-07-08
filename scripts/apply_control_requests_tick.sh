@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/data/finance-db
+cd "$(dirname "$0")/.."
 
 # Apply pending dashboard control requests (paper-only control plane).
 # Runs every minute, no market-hours gate: strategy toggles and risk-cap edits

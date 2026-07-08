@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/data/finance-db
+cd "$(dirname "$0")/.."
 
 # Run only during the intraday BankNifty options window. Paper only.
 # Adaptive cadence:

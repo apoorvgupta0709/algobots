@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/data/finance-db
+cd "$(dirname "$0")/.."
 
 # After-market BankNifty day-pattern builder + report. Research / paper-only:
 # no FYERS order placement, no execution-log writes. Builds today's session

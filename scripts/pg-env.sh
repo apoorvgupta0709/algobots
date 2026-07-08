@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export FINANCE_DB_BASE=/opt/data/finance-db
+export FINANCE_DB_BASE="${FINANCE_DB_BASE:-/opt/data/finance-db}"   # Postgres deploy dir (NOT the repo); override via env
 export PGROOT="$FINANCE_DB_BASE/pgroot"
 export PGDATA="$FINANCE_DB_BASE/pgdata"
 export PGBIN="$PGROOT/usr/lib/postgresql/17/bin"
