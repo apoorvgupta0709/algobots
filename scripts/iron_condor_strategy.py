@@ -5,7 +5,7 @@ Paper-only intraday neutral strategy for BankNifty index options.
 Sells an OTM put credit spread + OTM call credit spread to collect
 premium in range-bound markets.
 
-Max loss: ₹3,000 per trade (fits BankNifty 100-pt step × 30 lot)
+Max loss: ₹18,000 per trade (600-pt wing × 30 lot BankNifty)
 """
 
 from __future__ import annotations
@@ -141,7 +141,8 @@ def evaluate_iron_condor(
     atm_iv: Decimal | None = None,
     lot_size: int = 30,
     strike_step: Decimal = Decimal("100"),
-    max_loss_cap: Decimal = Decimal("3000"),
+    max_loss_cap: Decimal = Decimal("18000"),
+    min_credit: Decimal = Decimal("200"),
 ) -> IronCondorSignal | None:
     """Backward-compatible wrapper around the BankNifty iron condor evaluator."""
     if vix is not None and (D(vix) < Decimal("10") or D(vix) > Decimal("25")):
@@ -154,7 +155,7 @@ def evaluate_iron_condor(
         lot_size=lot_size,
         strike_step=strike_step,
         max_loss_cap=max_loss_cap,
-        min_credit=Decimal("200"),
+        min_credit=min_credit,
     )
 
 
@@ -175,10 +176,10 @@ def evaluate_bn_iron_condor(
     1. Range day (< 1.0%)
     2. Late entry window after 11:30 IST
     3. Nearest expiry (monthly or weekly) accepted — no strict day limit
-    4. Strikes: sell 1 step OTM, buy 3 additional steps away
+    4. Strikes: sell 0.5% OTM, buy 1.5% OTM (~600-pt wings)
     5. Low-body candle with both wicks (no directional conviction)
-    6. Net credit ≥ ₹300 minimum
-    7. Intraday stop risk capped at ₹3,000
+    6. Net credit ≥ ₹200 minimum
+    7. Intraday stop risk capped at ₹18,000
     """
     if not candles or spot <= 0 or len(candles) < 10:
         return None
