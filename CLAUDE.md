@@ -4,33 +4,54 @@ Guidance for working in this repository. Read this before making changes.
 
 ## What this is
 
-A **paper-only** options-trading research system for NSE BankNifty / Nifty index
-options. It ingests FYERS API v3 market data into PostgreSQL, runs deterministic
-trading logic + backtests, and exposes a read-only Streamlit dashboard.
+Two co-resident subsystems in one repo:
 
-`pyproject.toml` names the project `finance-db`. The repo is deployed/run from
-`/opt/data/finance-db/` — README.md and the shell wrappers use that absolute
-path. In this checkout, run scripts relative to the repo root.
+1. **`finance-db` (legacy research system)** — `scripts/`, `dashboard/`,
+   `config/`, `migrations/`. A **paper-only** options-trading research system
+   for NSE BankNifty / Nifty index options: ingests FYERS API v3 data into
+   PostgreSQL, runs deterministic trading logic + proxy backtests, and exposes
+   a read-only Streamlit dashboard. Deployed/run from `/opt/data/finance-db/`;
+   in this checkout, run scripts relative to the repo root (the wrappers now
+   `cd` to their own location).
+2. **`algobot/` (platform)** — a 49-strategy backtest/paper/**live-capable**
+   NSE trading platform (FastAPI control plane, APScheduler engine, Docker
+   Compose). It contains a real FYERS live-order adapter, held behind a hard
+   fuse (below). `pyproject.toml` names the project `algobot`.
 
-### Safety is the core invariant — do not break it
+### Safety — the core invariant, across BOTH subsystems
 
-This system **never places live orders**. No FYERS order-placement code exists.
-When changing anything, preserve these guarantees:
+The **finance-db** subsystem never places live orders and contains no
+FYERS order-placement code. Preserve:
 
-- All configs ship with `paper_only: true` and `live_orders_enabled: false`.
-  Config validation **rejects** any config that sets either otherwise — keep it.
+- All `config/*.json` ship `paper_only: true` and `live_orders_enabled: false`;
+  every `scripts/` config loader **rejects** (SystemExit) any config that flips
+  either — keep it.
 - Long options only. Option-selling / short-premium structures are blocked.
-- The dashboard is **SELECT-only**: it connects via a dedicated read-only DB role
-  (`dashboard_ro`, migration `009`), sets the connection read-only, rejects
-  INSERT/UPDATE/DELETE/DDL, makes no FYERS calls, no LLM/external calls, and binds
-  to loopback (`127.0.0.1:8501`) by default.
-- `trading.execution_log` requires an explicit `approval_id`; there is no script
-  that writes to it.
+- The dashboard is **SELECT-only**: dedicated read-only role (`dashboard_ro`,
+  migration `009`), `conn.read_only=True`, rejects INSERT/UPDATE/DELETE/DDL, no
+  FYERS/LLM/external calls, binds to loopback (`127.0.0.1:8501`) by default.
+- `trading.execution_log` requires an explicit `approval_id`; no script writes it.
 - `scripts/run_live_order_gate.py` + `config/live_order_gate.json` are dry-run
-  scaffolding only (`live_orders_enabled: false`).
+  scaffolding only.
 
-If a task seems to ask for live trading, surface the conflict — don't silently
-enable it.
+The **algobot/** subsystem CAN route real orders, so it is fused closed:
+
+- `live_orders_enabled` (`config/settings.yaml`, or env
+  `ALGOBOT_LIVE_ORDERS_ENABLED`) defaults **false** and fails closed on any
+  malformed value. While closed: the scheduler never wires `FyersBroker`
+  (auth success grants live *data* only), `lifecycle.set_mode` refuses
+  promotion to LIVE (`force` cannot override), and `FyersBroker.place_order`
+  refuses at the lowest layer. Opening the fuse is the explicit, deliberate act
+  of enabling real-money trading. See `algobot/core/config.live_orders_enabled`.
+- The control API (`algobot/api/`) requires an `ALGOBOT_API_KEY` header on all
+  state-changing routes (promote/demote/killswitch/gates and `POST /queries`);
+  unset key → 503. `docker-compose.yml` binds api/dashboard to `127.0.0.1` and
+  requires `POSTGRES_PASSWORD`.
+- `codesfiles/s102_algobotstart.py` is a legacy live bot (places real orders,
+  incl. short options); it refuses to run without `ALGOBOT_LEGACY_LIVE_ACK`.
+
+If a task seems to ask for live trading, surface the conflict and confirm —
+don't silently open the fuse.
 
 ## Tech stack
 
@@ -44,8 +65,9 @@ enable it.
 
 ```bash
 uv sync                                   # install deps
-uv sync --group dev                       # + pytest
-uv run pytest -q                          # run the test suite
+uv sync --group dev                       # + pytest (uv-native dev group)
+uv run pytest -q                          # whole suite (both subsystems);
+                                          # tests needing live Postgres self-skip
 uv run pytest tests/test_banknifty_options_paper.py -v   # one file
 
 # PostgreSQL lifecycle (wrappers assume the /opt/data/finance-db deploy path)
@@ -111,8 +133,9 @@ Report "how it could have been played" / "bot lessons" use the runner exit model
 - `config/*.json` — strategy params. **No thresholds are hardcoded**; everything
   is config-driven.
 - `migrations/*.sql` — idempotent PostgreSQL schema, applied in number order.
-- `tests/test_*.py` — pytest suite, ~1:1 with `scripts/*.py`. No DB needed; inputs
-  are hardcoded/sample rows.
+- `tests/test_*.py` — one unified pytest suite (finance-db + algobot). Most need
+  no DB; the few that need live Postgres self-skip via the `requires_finance_db`
+  marker (`tests/conftest.py`).
 - `watchlists/*.csv` — symbol universes (`symbol,fyers_symbol,company,sector,basket,notes`).
 - `docs/strategy-cards/` — Markdown research cards per strategy. `docs/plans/` — roadmap.
 - `reports/` — generated Markdown/CSV output (timestamped filenames).
@@ -128,9 +151,19 @@ Report "how it could have been played" / "bot lessons" use the runner exit model
   the source of truth — not local files.
 - Secrets live only in `.env` (copy `.env.example`); never commit tokens. Do not
   paste FYERS secrets/tokens into chat.
+- **Paper P&L is spread/cost-aware.** `config/banknifty_options_paper.json` has
+  `fills` (entries fill at ask, exits at bid) and `costs` (NSE round-trip stack
+  deducted from `realized_pnl`) blocks; both default OFF in code so pure
+  functions are unchanged when absent. Backtests are still index-move **proxy**
+  backtests — no theta/IV/gamma. See `reports/SUPERSEDED.md` for stale artifacts.
+- Cron tick wrappers push a Telegram alert on failure when `TELEGRAM_BOT_TOKEN`
+  / `TELEGRAM_CHAT_ID` are set (`scripts/notify_telegram.sh`).
+- `docker compose` now requires `POSTGRES_PASSWORD` (no weak default) and binds
+  to loopback.
 
 ## Before you finish
 
-- Run `uv run pytest -q` — the suite covers the safety rails (paper-only enforcement,
-  exit logic, risk caps). Keep it green.
-- Re-confirm no config or code path enables live orders.
+- Run `uv run pytest -q` — the suite covers the safety rails (paper-only
+  enforcement, the algobot live-orders fuse, exit logic, risk caps). Keep it green.
+- Re-confirm the finance-db configs still ship paper-only and that the
+  `algobot/` `live_orders_enabled` fuse is still closed by default.

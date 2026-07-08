@@ -151,6 +151,7 @@
       "status": "paper_ready",
       "source": "Trading Vault/03 Strategy Ideas/BankNifty Constituent-Led Directional Long Options.md",
       "notes": "Only active paper entry strategy. Long CE/PE only; no live orders.",
+      "gate_review": "2026-07-08 critical review: FAILS 2 of its own 4 acceptance gates on the post-bugfix backtest (expectancy 0.13R < 0.15R required; MFE capture 33% < 55% required) over 77 proxy trades. Kept ENABLED in paper for continued forward measurement under the new spread/cost-aware P&L; do NOT promote or treat as validated edge until re-tuned on fixed code and it clears its gates.",
       "card_type": "entry"
     },
     {
