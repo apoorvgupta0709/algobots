@@ -128,8 +128,8 @@ Report: `reports/fts_swing_v1_backtest_20260708_120832.md`
 | NSE Strategy Pack | 2020–2026 | 611 | **-₹60,682** | 40.9% | ❌ Negative |
 | Nifty VWAP | 2020–2026 | 426 | **-₹104,410** | 47.7% | ❌ Deeply negative |
 | FTS Swing | 2025–2026 | 27 | +₹339 | 59.3% | ✅ Encouraging (tech-only) |
-| BN Iron Condor | 2021–2026 | 0 | ₹0 | — | 🔧 Bug (timezone) |
-| Nifty Iron Condor | 2020–2026 | 0 | ₹0 | — | 🔧 Bug (premium model) |
+| BN Iron Condor | 2021–2026 | 27 | **+₹665** | 96.3% | ✅ Fixed |
+| Nifty Iron Condor | 2020–2026 | 359 | **-₹184,279** | 63.8% | ⚠️ Fixed (P&L –ve, needs stop tuning) |
 
 *\*BN Pullback only trades in FYERS era (Feb 2026+) due to constituent candle gap*
 
