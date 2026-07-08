@@ -44,6 +44,7 @@ def settings() -> dict[str, Any]:
     cfg["engine"].setdefault("squareoff_time", "15:15")
     cfg["engine"].setdefault("eod_scan_time", "15:45")
     cfg["engine"].setdefault("token_refresh_time", "08:45")
+    cfg["engine"].setdefault("max_candle_staleness_min", 20)  # drop intraday data older than this in live scans
     cfg.setdefault("data_cache_dir", str(REPO_ROOT / "data" / "cache"))
     cfg["database_url"] = os.getenv(
         "DATABASE_URL", cfg.get("database_url", f"sqlite:///{REPO_ROOT}/data/algobot.db"))

@@ -101,21 +101,8 @@ def credit_lots(structure: OptionStructure, spot: float, lot: int,
                 risk_amt: float, capital: float) -> int:
     """Lots for credit/undefined-risk structures via the margin subsystem.
 
-    Falls back to 1 lot when ``algobot.options.margin`` is unavailable.
+    Delegates to the shared :func:`algobot.options.sizing.structure_lots`
+    (also used by the live/paper OrderManager, so both paths size alike).
     """
-    try:
-        from algobot.options.margin import estimate_margin  # lazy
-        margin = float(estimate_margin(structure, spot, lot))
-        if margin <= 0 or not math.isfinite(margin):
-            return 1
-        if margin > capital:
-            log.warning("Margin/lot %.0f exceeds capital %.0f for %s — skipping",
-                        margin, capital, structure.name)
-            return 0
-        return max(int(risk_amt // margin), 1)
-    except ImportError:
-        return 1
-    except Exception:
-        log.debug("estimate_margin failed for %s — 1 lot", structure.name,
-                  exc_info=True)
-        return 1
+    from algobot.options.sizing import structure_lots
+    return structure_lots(structure, spot, lot, risk_amt, capital)

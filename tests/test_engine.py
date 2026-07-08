@@ -369,6 +369,28 @@ class TestRunner:
         with session_scope() as s:
             assert s.query(PositionRow).count() == 0
 
+    def test_scan_drops_stale_candles_and_takes_no_trade(self):
+        class StaleFeed(FakeFeed):
+            def get_candles(self, symbol, timeframe, start, end):
+                # Bars end 3 hours ago -> far beyond the freshness cutoff.
+                idx = pd.date_range(
+                    end=now_ist().replace(second=0, microsecond=0)
+                    - dt.timedelta(hours=3),
+                    periods=50, freq="5min", tz="Asia/Kolkata", name="ts")
+                return pd.DataFrame(
+                    {"open": self.price, "high": self.price,
+                     "low": self.price, "close": self.price, "volume": 1000.0},
+                    index=idx)
+
+        lifecycle.sync_config_to_db()
+        runner = make_runner(StaleFeed())
+        runner.scan(SCAN_EVERY_5MIN)   # must not fire signals off stale data
+        with session_scope() as s:
+            assert s.query(PositionRow).count() == 0
+            warns = (s.query(EventLogRow)
+                     .filter_by(source="engine", level="warn").all())
+            assert any("stale" in e.message for e in warns)
+
     def test_monitor_tick_marks_positions(self):
         lifecycle.sync_config_to_db()
         runner = make_runner()

@@ -94,12 +94,18 @@ class OrderManager:
     def _build_orders(self, signal: Signal, mode: Mode, capital: float,
                       signal_id: int) -> list[Order]:
         if signal.structure is not None:
-            return self._structure_orders(signal, mode, signal_id)
+            return self._structure_orders(signal, mode, capital, signal_id)
         return self._single_orders(signal, mode, capital, signal_id)
 
-    def _structure_orders(self, signal: Signal, mode: Mode,
+    def _structure_orders(self, signal: Signal, mode: Mode, capital: float,
                           signal_id: int) -> list[Order]:
-        """One order per resolved option leg, sharing a structure_id."""
+        """One order per resolved option leg, sharing a structure_id.
+
+        Structures with a short leg are margin-sized against the risk budget
+        via the same helper the backtest uses, so paper/live risk matches the
+        risk profile the backtest evaluated. Pure-long (debit) structures
+        keep the strategy's leg.lots (their max loss is the debit paid).
+        """
         builder = self.leg_builder
         if builder is None:
             from algobot.options.leg_builder import LegBuilder  # lazy: optional dep
@@ -108,6 +114,18 @@ class OrderManager:
                                     now=signal.timestamp)
         structure_id = uuid.uuid4().hex
         per_lot = lot_size(structure.underlying)
+        sized_lots = 1
+        if any(leg.side == Side.SELL for leg in structure.legs):
+            from algobot.options.sizing import structure_lots
+            risk_amt = capital * float(self.risk.cfg["risk_per_trade_pct"]) / 100.0
+            sized_lots = structure_lots(structure, float(signal.reference_price),
+                                        per_lot, risk_amt, capital)
+            if sized_lots <= 0:
+                self._journal(
+                    "warn",
+                    f"{signal.strategy_id}: {structure.name} margin/lot exceeds "
+                    f"capital {capital:.0f} — structure sized to zero")
+                return []
         orders = []
         for leg in structure.legs:
             if not leg.resolved_symbol:
@@ -115,7 +133,7 @@ class OrderManager:
                                   f"{structure.name} ({signal.strategy_id})")
             orders.append(Order(
                 strategy_id=signal.strategy_id, symbol=leg.resolved_symbol,
-                side=leg.side, qty=leg.lots * per_lot,
+                side=leg.side, qty=leg.lots * sized_lots * per_lot,
                 order_type=OrderType.MARKET, product_type=signal.product_type,
                 mode=mode, tag=f"{signal.strategy_id}:{structure_id}",
                 signal_id=signal_id,

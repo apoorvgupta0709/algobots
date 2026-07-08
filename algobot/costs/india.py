@@ -44,8 +44,11 @@ RATES: dict[str, SegmentRates] = {
     "index_future":    SegmentRates(20.0, 0.03,    0.0,   0.02,   0.00173, 0.002),
     "stock_future":    SegmentRates(20.0, 0.03,    0.0,   0.02,   0.00210, 0.002),
     # brokerage_pct 0.0 => flat per-order brokerage only (options are flat Rs 20)
-    "index_option":    SegmentRates(20.0, 0.0,     0.0,   0.15,   0.03503, 0.003),
-    "stock_option":    SegmentRates(20.0, 0.0,     0.0,   0.15,   0.05030, 0.003),
+    # Options STT (sell side, % of premium) is 0.10% since 2024-10-01
+    # (Finance (No. 2) Act 2024); 0.15% here previously overstated the largest
+    # per-trade cost line by 50%.
+    "index_option":    SegmentRates(20.0, 0.0,     0.0,   0.10,   0.03503, 0.003),
+    "stock_option":    SegmentRates(20.0, 0.0,     0.0,   0.10,   0.05030, 0.003),
 }
 
 # Slippage assumptions (compendium §8.1): fraction of traded price, per side.

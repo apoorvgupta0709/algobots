@@ -99,6 +99,7 @@ class CachedFeed(DataFeed):
                                 "and no inner feed (cache-only mode)")
             return _slice(cached, start, end)
 
+        served_stale = False
         for fetch_start, fetch_end in self._missing_ranges(cached, start, end):
             try:
                 fresh = self.inner.get_candles(symbol, timeframe, fetch_start, fetch_end)
@@ -107,12 +108,18 @@ class CachedFeed(DataFeed):
                     raise
                 logger.warning("delta fetch failed for %s %s %s..%s; serving cache",
                                symbol, _tf_key(timeframe), fetch_start, fetch_end)
+                served_stale = True
                 continue
             cached = self.cache.write(symbol, timeframe, fresh)
 
         if cached is None or cached.empty:
             raise DataError(f"no candles available for {symbol} {_tf_key(timeframe)}")
-        return _slice(cached, start, end)
+        out = _slice(cached, start, end)
+        if served_stale:
+            # Surface silently-served stale data so the runner's freshness
+            # guard can refuse to trade on it (and say why).
+            out.attrs["served_stale"] = True
+        return out
 
     @staticmethod
     def _missing_ranges(cached: pd.DataFrame | None, start: dt.date,

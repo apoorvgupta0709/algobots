@@ -16,6 +16,7 @@ import pandas as pd
 
 from algobot.core import universes
 from algobot.core.clock import now_ist
+from algobot.core.config import settings
 from algobot.core.enums import Mode, ProductType, Timeframe
 from algobot.core.exceptions import DataError
 from algobot.core.models import Position, Signal
@@ -129,6 +130,23 @@ class StrategyRunner:
                           {"strategy_id": strategy.strategy_id})
             return
 
+        stale = self._stale_symbols(data, strategy.meta, now)
+        if stale:
+            for symbol in stale:
+                data.pop(symbol, None)
+            self._journal("warn",
+                          f"stale candles dropped for {strategy.strategy_id}: "
+                          f"{stale[:5]}{' ...' if len(stale) > 5 else ''} — "
+                          "signals must not fire off yesterday's prices",
+                          {"strategy_id": strategy.strategy_id,
+                           "stale_symbols": stale})
+        if not data:
+            self._journal("warn",
+                          f"scan skipped for {strategy.strategy_id}: all "
+                          "candle data stale",
+                          {"strategy_id": strategy.strategy_id})
+            return
+
         ctx.option_chain = self._chain_provider(data, now)
         ctx.leg_builder = LegBuilder(chain_provider=ctx.option_chain)
 
@@ -157,6 +175,34 @@ class StrategyRunner:
                           f"order submit failed for {signal.strategy_id} "
                           f"({signal.instrument}): {exc}",
                           {"strategy_id": signal.strategy_id})
+
+    # ------------------------------------------------------------------ freshness
+    @staticmethod
+    def _stale_symbols(data: dict[str, pd.DataFrame], meta,
+                       now: dt.datetime) -> list[str]:
+        """Symbols whose newest intraday candle is too old to trade on.
+
+        Guards against a live scan firing signals off stale-but-present data
+        (a delta-fetch failure served from cache, or a frozen feed). Daily
+        strategies are exempt (last bar is legitimately yesterday's close);
+        cached frames flagged ``served_stale`` are always rejected.
+        """
+        if meta.timeframe == Timeframe.DAY:
+            return [s for s, df in data.items() if df.attrs.get("served_stale")]
+        tf_min = int(meta.timeframe.value)
+        max_age_min = max(3 * tf_min,
+                          int(settings()["engine"].get("max_candle_staleness_min", 20)))
+        cutoff = _naive(now) - dt.timedelta(minutes=max_age_min)
+        stale: list[str] = []
+        for symbol, df in data.items():
+            if df.attrs.get("served_stale"):
+                stale.append(symbol)
+                continue
+            last = df.index[-1]
+            last = last.to_pydatetime() if hasattr(last, "to_pydatetime") else last
+            if _naive(last) < cutoff:
+                stale.append(symbol)
+        return stale
 
     # ------------------------------------------------------------------ window
     @staticmethod

@@ -155,6 +155,15 @@ class OptionDataProvider:
         _root, expiry, strike, opt = parsed
         t_years = compat.years_to_expiry(ts.to_pydatetime(), expiry)
         iv = compat._iv_of(self.iv_source, symbol, ts.to_pydatetime())
+        # Apply the SAME volatility smile the chain uses to SELECT strikes, so
+        # a leg is priced on the curve it was chosen from (OTM wings were
+        # otherwise priced with a flatter IV than they were picked at).
+        if spot > 0:
+            try:
+                from algobot.options.chain import SMILE_SLOPE
+            except Exception:
+                SMILE_SLOPE = 0.15
+            iv = iv * (1.0 + SMILE_SLOPE * abs(strike / spot - 1.0))
         try:
             from algobot.options.pricing import bs_price  # lazy: real module first
             px = float(bs_price(spot, strike, t_years, iv, opt))

@@ -379,6 +379,35 @@ class TestOrderManager:
             assert rows[0].structure_id and rows[0].structure_id == rows[1].structure_id
             assert all(r.underlying == "NSE:NIFTY50-INDEX" for r in rows)
 
+    def test_structure_sized_to_zero_when_margin_exceeds_capital(self):
+        class StubLegBuilder:
+            def resolve(self, structure, spot, now):
+                for i, leg in enumerate(structure.legs):
+                    leg.resolved_symbol = (f"NSE:NIFTY26JUL{24500 + i * 100}"
+                                           f"{leg.option_type.value}")
+                return structure
+
+        stub = StubBroker(quotes={})
+        # Tiny capital so one lot's SPAN margin exceeds it -> no orders.
+        risk = RiskEngine(capital=10_000)
+        om = OrderManager({Mode.LIVE: stub}, risk, CostModel(),
+                          leg_builder=StubLegBuilder())
+        structure = OptionStructure(
+            name="short_straddle", underlying="NSE:NIFTY50-INDEX",
+            legs=[OptionLeg(Side.SELL, OptionType.CE, StrikeRule.atm(),
+                            ExpiryRule.weekly()),
+                  OptionLeg(Side.SELL, OptionType.PE, StrikeRule.atm(),
+                            ExpiryRule.weekly())],
+            net_direction="credit")
+        signal = make_signal(instrument="NSE:NIFTY50-INDEX", reference=24500.0,
+                             stop=24650.0, strategy_id="op1", structure=structure)
+
+        orders = om.submit(signal, Mode.LIVE, 10_000)
+        assert orders == [] and stub.orders == []
+        with session_scope() as s:
+            sig = s.query(SignalRow).one()
+            assert sig.status == "rejected"
+
     def test_flatten_closes_book_and_rolls_day_state(self):
         quotes = {"NSE:AAA-EQ": 100.0, "NSE:BBB-EQ": 50.0}
         broker = PaperBroker(quote_fn=dict_quote_fn(quotes))
