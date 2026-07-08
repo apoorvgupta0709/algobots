@@ -1,3 +1,11 @@
+> **⚠️ SUPERSEDED (2026-07-08) — DO NOT USE THESE NUMBERS.**
+> This report was generated BEFORE the 2026-06-11/12 trading-logic bug fixes
+> (inverted relative-strength check, dead-code ORB filter, breakeven/ratchet
+> timing, and the missing cost line). Its headline figures (~87% win rate,
+> ~1.2R expectancy, ~₹101k P&L) are inflated and do not reflect the current
+> code. Current reference run: `banknifty_pullback_v2_proxy_backtest_20260612_061414.md`
+> (77 trades, 61% win rate, 0.13R expectancy). See `reports/SUPERSEDED.md`.
+
 # BankNifty Pullback Continuation v2 — Proxy Backtest
 
 Research-only; no orders placed.
