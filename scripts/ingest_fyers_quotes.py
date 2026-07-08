@@ -164,7 +164,9 @@ def run_ingest(symbols: list[str]) -> None:
                             first_present(v, "open_price", "open"),
                             first_present(v, "high_price", "high"),
                             first_present(v, "low_price", "low"),
-                            first_present(v, "prev_close_price", "close", "chp"),
+                            # NOTE: "chp" is change-PERCENT, not a price — it
+                            # must never be a fallback for close.
+                            first_present(v, "prev_close_price", "close"),
                             first_present(v, "volume", "vol_traded_today"),
                             as_time(first_present(v, "tt", "exchange_timestamp", "cmd", "last_traded_time")),
                             json.dumps(item),

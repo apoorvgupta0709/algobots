@@ -181,6 +181,23 @@ def test_non_ok_note_omits_raw_payload(monkeypatch):
     assert "raw_echo" not in notes
 
 
+def test_chp_never_stored_as_close(monkeypatch):
+    # "chp" is FYERS change-PERCENT; storing it as a close price silently
+    # corrupts market.quotes.close. With prev_close_price/close absent the
+    # stored close must be NULL, never the percentage.
+    store = _store()
+    response = {"s": "ok", "d": [{"n": "NSE:SBIN-EQ", "v": {"lp": 100, "chp": 0.53}}]}
+    _wire(monkeypatch, store, response=response)
+
+    iq.run_ingest(["NSE:SBIN-EQ"])
+
+    quote_inserts = [params for sql, params in store["calls"]
+                     if "insert into market.quotes" in sql]
+    assert len(quote_inserts) == 1
+    # params: (symbol, ltp, open, high, low, close, volume, quote_time, raw)
+    assert quote_inserts[0][5] is None
+
+
 def test_redact_helper_caps_length():
     long = "x" * 5000
     assert len(iq._redact(long)) <= 520

@@ -239,6 +239,28 @@ def ingest_underlying(
     return len(rows_with_raw)
 
 
+def _redact(text: str, *, limit: int = 500) -> str:
+    """Scrub known secret env values out of a note string and cap its length.
+
+    Run notes are persisted to PostgreSQL and printed, so they must never carry
+    tokens / client ids / secrets that might appear inside an exception message
+    or a URL embedded in it. (Same helper as ingest_fyers_quotes.py.)
+    """
+    out = text
+    for name in (
+        "FYERS_ACCESS_TOKEN",
+        "FYERS_CLIENT_ID",
+        "FYERS_SECRET_KEY",
+        "FYERS_REFRESH_TOKEN",
+    ):
+        secret = os.getenv(name)
+        if secret:
+            out = out.replace(secret, f"<{name}>")
+    if len(out) > limit:
+        out = out[:limit] + "...(truncated)"
+    return out
+
+
 def run_ingest(underlyings: list[str], strikecount: int) -> None:
     api = fyers()
     snapshot_time = datetime.now(timezone.utc)
@@ -277,8 +299,11 @@ def run_ingest(underlyings: list[str], strikecount: int) -> None:
                     set finished_at = now(), status = 'error', notes = %s, rows_inserted = %s
                     where run_id = %s
                     """,
-                    (str(exc), rows, run_id),
+                    (_redact(str(exc)), rows, run_id),
                 )
+                # Persist the failed run before re-raising; the context manager
+                # rolls back on exception, which would otherwise discard it.
+                conn.commit()
                 raise
     print(f"Stored {rows} option-chain rows across {len(underlyings)} underlying(s)")
 

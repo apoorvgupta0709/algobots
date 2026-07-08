@@ -88,6 +88,28 @@ def upsert_instrument(cur: psycopg.Cursor, symbol: str, raw: dict[str, Any] | No
     )
 
 
+def _redact(text: str, *, limit: int = 500) -> str:
+    """Scrub known secret env values out of a note string and cap its length.
+
+    Run notes are persisted to PostgreSQL and printed, so they must never carry
+    tokens / client ids / secrets that might appear inside an exception message
+    or a URL embedded in it. (Same helper as ingest_fyers_quotes.py.)
+    """
+    out = text
+    for name in (
+        "FYERS_ACCESS_TOKEN",
+        "FYERS_CLIENT_ID",
+        "FYERS_SECRET_KEY",
+        "FYERS_REFRESH_TOKEN",
+    ):
+        secret = os.getenv(name)
+        if secret:
+            out = out.replace(secret, f"<{name}>")
+    if len(out) > limit:
+        out = out[:limit] + "...(truncated)"
+    return out
+
+
 def run_ingest(symbols: list[str], resolution: str, range_from: str, range_to: str, cont_flag: str) -> None:
     validate_ingest_args(resolution, range_from, range_to)
     api = fyers()
@@ -155,6 +177,10 @@ def run_ingest(symbols: list[str], resolution: str, range_from: str, range_to: s
                         )
                         if cur.rowcount == 1:
                             rows_inserted += 1
+                    # Commit per symbol so candles already stored survive a
+                    # failure on a later symbol in the same batch (the printed
+                    # "stored" line must never lie about persistence).
+                    conn.commit()
                     print(f"{symbol}: stored {len(candles)} candles")
 
                 cur.execute(
@@ -172,8 +198,11 @@ def run_ingest(symbols: list[str], resolution: str, range_from: str, range_to: s
                     set finished_at = now(), status = 'error', notes = %s, rows_inserted = %s, rows_updated = %s
                     where run_id = %s
                     """,
-                    (str(exc), rows_inserted, rows_updated, run_id),
+                    (_redact(str(exc)), rows_inserted, rows_updated, run_id),
                 )
+                # Persist the failed run before re-raising; the context manager
+                # rolls back on exception, which would otherwise discard it.
+                conn.commit()
                 raise
 
     print(f"Done. Rows processed: {rows_inserted + rows_updated}")
