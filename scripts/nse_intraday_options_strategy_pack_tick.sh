@@ -11,8 +11,17 @@ fi
 if [ "$HM" -lt 0930 ] || [ "$HM" -gt 1525 ]; then
   exit 0
 fi
-exec flock -n /tmp/nse_intraday_options_strategy_pack.lock \
-  uv run python scripts/run_nse_intraday_options_strategy_pack.py \
+exec 9>/tmp/nse_intraday_options_strategy_pack.lock
+if ! flock -n 9; then
+  exit 0
+fi
+
+rc=0
+uv run python scripts/run_nse_intraday_options_strategy_pack.py \
     --config config/nse_intraday_options_strategy_pack.json \
     --mode tick \
-    --refresh
+    --refresh || rc=$?
+if [ "$rc" -ne 0 ]; then
+  ./scripts/notify_telegram.sh "ALERT nse_intraday_options_strategy_pack_tick failed (rc=$rc) at $(TZ=Asia/Kolkata date '+%F %T') on $(hostname). Open paper positions may not be getting stop/exit checks."
+fi
+exit "$rc"
