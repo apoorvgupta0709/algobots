@@ -50,6 +50,12 @@ class FyersBroker(BrokerInterface):
     # ------------------------------------------------------------------ orders
     def place_order(self, order: Order) -> Order:
         """Place a single order; returns it with broker_order_id and PLACED status."""
+        from algobot.core.config import live_orders_enabled
+        if not live_orders_enabled():
+            order.status = OrderStatus.REJECTED
+            raise BrokerError(
+                f"live order REFUSED for {order.symbol}: the live_orders_enabled "
+                "fuse is closed (config/settings.yaml / ALGOBOT_LIVE_ORDERS_ENABLED)")
         payload = {
             "symbol": order.symbol,
             "qty": int(abs(order.qty)),

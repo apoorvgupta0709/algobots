@@ -597,7 +597,8 @@ class FakeFyersClient:
 
 
 class TestFyersBroker:
-    def test_place_order_payload_and_response(self):
+    def test_place_order_payload_and_response(self, monkeypatch):
+        monkeypatch.setenv("ALGOBOT_LIVE_ORDERS_ENABLED", "true")  # open the fuse
         fake = FakeFyersClient()
         broker = FyersBroker(client=fake)
         assert broker.name == "fyers"
@@ -615,7 +616,8 @@ class TestFyersBroker:
         assert out.broker_order_id == "24070300001"
         assert out.status == OrderStatus.PLACED
 
-    def test_place_order_error_raises_broker_error(self):
+    def test_place_order_error_raises_broker_error(self, monkeypatch):
+        monkeypatch.setenv("ALGOBOT_LIVE_ORDERS_ENABLED", "true")  # open the fuse
         fake = FakeFyersClient()
         fake.place_resp = {"s": "error", "message": "RMS: margin shortfall"}
         broker = FyersBroker(client=fake)

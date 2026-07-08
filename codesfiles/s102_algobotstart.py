@@ -1,3 +1,16 @@
+# SAFETY GUARD: this legacy bot logs into FYERS at import time and places
+# REAL orders — including SHORT option legs — with no gate, dry-run mode, or
+# risk caps. It is kept for reference only and refuses to run without an
+# explicit acknowledgement.
+import os as _os
+
+if _os.getenv("ALGOBOT_LEGACY_LIVE_ACK") != "I_UNDERSTAND_THIS_PLACES_REAL_ORDERS":
+    raise SystemExit(
+        "Refusing to run: legacy live bot disabled. It places real FYERS "
+        "orders (including short options) with no safety gate. Set "
+        "ALGOBOT_LEGACY_LIVE_ACK=I_UNDERSTAND_THIS_PLACES_REAL_ORDERS "
+        "only if you truly intend live trading.")
+
 from datetime import datetime, timedelta, time
 import pandas as pd
 import pytz

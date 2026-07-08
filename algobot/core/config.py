@@ -50,6 +50,37 @@ def settings() -> dict[str, Any]:
     return cfg
 
 
+_TRUE_STRINGS = frozenset({"true", "1", "yes", "on"})
+_FALSE_STRINGS = frozenset({"false", "0", "no", "off", ""})
+
+
+def live_orders_enabled() -> bool:
+    """Hard paper-only fuse. Live order routing is allowed ONLY when this
+    returns True; it defaults to False and fails closed on any malformed
+    value (SystemExit, matching the legacy scripts' loader convention).
+
+    Precedence: env ALGOBOT_LIVE_ORDERS_ENABLED > settings.yaml
+    live_orders_enabled > False. Deliberately not cached: read at boot and
+    at every mode change / order placement.
+    """
+    raw: Any = os.getenv("ALGOBOT_LIVE_ORDERS_ENABLED")
+    source = "env ALGOBOT_LIVE_ORDERS_ENABLED"
+    if raw is None:
+        raw = _read_yaml("settings.yaml").get("live_orders_enabled", False)
+        source = "settings.yaml live_orders_enabled"
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        lowered = raw.strip().lower()
+        if lowered in _TRUE_STRINGS:
+            return True
+        if lowered in _FALSE_STRINGS:
+            return False
+    raise SystemExit(
+        f"Unsafe config: {source}={raw!r} is not a strict boolean; "
+        "refusing to start (fail-closed live-orders fuse)")
+
+
 @lru_cache(maxsize=None)
 def gate_config() -> dict[str, Any]:
     cfg = _read_yaml("gate.yaml")

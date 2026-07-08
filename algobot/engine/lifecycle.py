@@ -135,6 +135,11 @@ def set_mode(strategy_id: str, mode: Mode, actor: str = "api",
                     f"{strategy_id}: promotion to LIVE blocked — gate "
                     f"{'not evaluated yet' if gate is None else 'not eligible'} "
                     f"(use force=True to override at your own risk)")
+        if mode == Mode.LIVE and not config.live_orders_enabled():
+            raise GateError(
+                f"{strategy_id}: promotion to LIVE refused — the "
+                "live_orders_enabled fuse is closed (config/settings.yaml or "
+                "ALGOBOT_LIVE_ORDERS_ENABLED); force cannot override the fuse")
         old_mode = row.mode
         row.mode = mode.value
         if mode == Mode.LIVE:

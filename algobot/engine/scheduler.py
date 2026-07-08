@@ -22,7 +22,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from algobot.core import clock, registry
+from algobot.core import clock, config, registry
 from algobot.core.config import settings
 from algobot.core.enums import Mode
 from algobot.core.exceptions import AuthError
@@ -90,6 +90,7 @@ class EngineService:
 
     def __init__(self) -> None:
         self.live_enabled = False
+        self._fyers_auth_ok = False
         self.feed = self._build_feed()
         self.risk = RiskEngine()
         brokers = self._build_brokers()
@@ -105,8 +106,18 @@ class EngineService:
 
             client = get_fyers_client()
             self._fyers_client = client
-            self.live_enabled = True
-            log.info("Fyers authenticated: live data + live routing available")
+            self._fyers_auth_ok = True
+            # Auth success alone grants live DATA only. Live order routing
+            # additionally requires the hard fuse to be explicitly opened.
+            self.live_enabled = config.live_orders_enabled()
+            if self.live_enabled:
+                log.info("Fyers authenticated: live data + live routing available")
+            else:
+                msg = ("Fyers authenticated: live data available, but live order "
+                       "routing is DISABLED by the live_orders_enabled fuse "
+                       "(config/settings.yaml / ALGOBOT_LIVE_ORDERS_ENABLED)")
+                log.info(msg)
+                _journal("warn", msg)
             return CachedFeed(FyersFeed(client))
         except AuthError as exc:
             reason = str(exc)

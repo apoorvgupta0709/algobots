@@ -1,4 +1,15 @@
 # Global platform settings. Env vars override (DATABASE_URL).
+
+# ============================================================================
+# HARD PAPER-ONLY FUSE. While false, the engine NEVER wires the live Fyers
+# broker, promotion to live mode is refused (force cannot override), and
+# FyersBroker.place_order refuses at the lowest layer. Opening this fuse is
+# an explicit, deliberate act: set it to true here (or via the
+# ALGOBOT_LIVE_ORDERS_ENABLED env var) only when you intend REAL ORDERS with
+# REAL MONEY. Any non-boolean value aborts startup (fail-closed).
+# ============================================================================
+live_orders_enabled: false
+
 capital: 500000            # total account capital (INR)
 
 risk:

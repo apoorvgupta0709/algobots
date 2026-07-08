@@ -210,7 +210,15 @@ class TestLifecycle:
         with pytest.raises(GateError):
             lifecycle.set_mode("zz98_dummy", Mode.LIVE)
 
-    def test_set_mode_live_with_force(self):
+    def test_set_mode_live_with_force_refused_while_fuse_closed(self):
+        # force bypasses the gate but can never bypass the live-orders fuse.
+        lifecycle.sync_config_to_db()
+        with pytest.raises(GateError, match="fuse"):
+            lifecycle.set_mode("zz98_dummy", Mode.LIVE, actor="tester",
+                               force=True)
+
+    def test_set_mode_live_with_force(self, monkeypatch):
+        monkeypatch.setenv("ALGOBOT_LIVE_ORDERS_ENABLED", "true")
         lifecycle.sync_config_to_db()
         row = lifecycle.set_mode("zz98_dummy", Mode.LIVE, actor="tester",
                                  force=True)
@@ -222,7 +230,15 @@ class TestLifecycle:
             events = s.query(EventLogRow).filter_by(source="lifecycle").all()
             assert any("live" in e.message for e in events)
 
-    def test_set_mode_live_with_eligible_gate(self):
+    def test_set_mode_live_eligible_gate_refused_while_fuse_closed(self):
+        lifecycle.sync_config_to_db()
+        with session_scope() as s:
+            s.add(GateStatusRow(strategy_id="zz98_dummy", eligible=True))
+        with pytest.raises(GateError, match="fuse"):
+            lifecycle.set_mode("zz98_dummy", Mode.LIVE, actor="api")
+
+    def test_set_mode_live_with_eligible_gate(self, monkeypatch):
+        monkeypatch.setenv("ALGOBOT_LIVE_ORDERS_ENABLED", "true")
         lifecycle.sync_config_to_db()
         with session_scope() as s:
             s.add(GateStatusRow(strategy_id="zz98_dummy", eligible=True))
