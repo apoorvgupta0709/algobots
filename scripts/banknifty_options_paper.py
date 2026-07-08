@@ -217,6 +217,35 @@ class RealisticRiskPlan:
 
 
 @dataclass(frozen=True)
+class FillModelConfig:
+    """Paper fill realism. Off by default so every pure function keeps its
+    historical behavior; config/banknifty_options_paper.json opts in.
+
+    When enabled, paper entries fill at the ask (or LTP + half spread) and
+    exits fill at the bid (or LTP - half spread) instead of pretending the
+    LTP was achievable on both sides of an allowed-up-to-3% spread.
+    """
+    spread_aware_fills_enabled: bool = False
+
+
+@dataclass(frozen=True)
+class CostModelConfig:
+    """Indian option round-trip cost stack deducted from paper realized P&L.
+
+    Disabled with all-zero rates by default (pure functions unchanged);
+    config opts in. Percent fields are percentages (0.10 == 0.10%),
+    sebi_per_crore is rupees per crore of premium turnover.
+    """
+    enabled: bool = False
+    per_order_flat_rupees: Decimal = Decimal("0")
+    sell_side_stt_pct: Decimal = Decimal("0")
+    exchange_txn_pct: Decimal = Decimal("0")
+    sebi_per_crore: Decimal = Decimal("0")
+    stamp_buy_pct: Decimal = Decimal("0")
+    gst_pct: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True)
 class CampaignConfig:
     campaign_name: str
     strategy_version: str
@@ -291,6 +320,8 @@ class CampaignConfig:
     strategy_router: tuple[StrategyCardRule, ...]
     risk_filter: RiskFilterConfig
     chain_signals: ChainSignalConfig
+    fills: FillModelConfig
+    costs: CostModelConfig
 
 
 @dataclass(frozen=True)
@@ -426,6 +457,39 @@ def parse_risk_filter_config(raw: Any) -> RiskFilterConfig:
         max_iv=decimal_from_config(raw.get("max_iv"), defaults.max_iv),
         require_iv=bool_from_config(raw.get("require_iv"), default=defaults.require_iv),
     )
+
+
+def parse_fill_model_config(raw: Any) -> FillModelConfig:
+    """Parse the paper fill-realism block; absent/malformed -> disabled."""
+    defaults = FillModelConfig()
+    if not isinstance(raw, dict):
+        return defaults
+    return FillModelConfig(
+        spread_aware_fills_enabled=bool_from_config(
+            raw.get("spread_aware_fills_enabled"),
+            default=defaults.spread_aware_fills_enabled),
+    )
+
+
+def parse_cost_model_config(raw: Any) -> CostModelConfig:
+    """Parse the round-trip cost block; absent/malformed -> disabled, all-zero."""
+    defaults = CostModelConfig()
+    if not isinstance(raw, dict):
+        return defaults
+    cfg = CostModelConfig(
+        enabled=bool_from_config(raw.get("enabled"), default=defaults.enabled),
+        per_order_flat_rupees=decimal_from_config(raw.get("per_order_flat_rupees"), defaults.per_order_flat_rupees),
+        sell_side_stt_pct=decimal_from_config(raw.get("sell_side_stt_pct"), defaults.sell_side_stt_pct),
+        exchange_txn_pct=decimal_from_config(raw.get("exchange_txn_pct"), defaults.exchange_txn_pct),
+        sebi_per_crore=decimal_from_config(raw.get("sebi_per_crore"), defaults.sebi_per_crore),
+        stamp_buy_pct=decimal_from_config(raw.get("stamp_buy_pct"), defaults.stamp_buy_pct),
+        gst_pct=decimal_from_config(raw.get("gst_pct"), defaults.gst_pct),
+    )
+    for field_name in ("per_order_flat_rupees", "sell_side_stt_pct", "exchange_txn_pct",
+                       "sebi_per_crore", "stamp_buy_pct", "gst_pct"):
+        if getattr(cfg, field_name) < 0:
+            raise SystemExit(f"Refusing to run: costs.{field_name} must be >= 0.")
+    return cfg
 
 
 def _quote_metric_scopes(meta: Any) -> list[dict[str, Any]]:
@@ -1012,6 +1076,8 @@ def load_config(path: Path = DEFAULT_CONFIG) -> CampaignConfig:
         strategy_router=parse_strategy_router(data.get("strategy_router")),
         risk_filter=parse_risk_filter_config(data.get("risk_filter")),
         chain_signals=parse_chain_signal_config(data.get("chain_signals")),
+        fills=parse_fill_model_config(data.get("fills")),
+        costs=parse_cost_model_config(data.get("costs")),
     )
 
 
@@ -1519,6 +1585,154 @@ def evaluate_stale_quote_force_exit(
         return None, None, None
     pnl = Decimal("0.00") if quantity else Decimal("0.00")
     return "force_intraday_exit_stale_quote", entry_premium, pnl
+
+
+def effective_entry_premium(
+    ltp: Decimal,
+    metrics: OptionQuoteMetrics,
+    *,
+    fills: FillModelConfig,
+    tick_size: Decimal,
+) -> tuple[Decimal, str]:
+    """Buy-side paper fill: ask -> LTP + half spread -> LTP.
+
+    Returns (fill_premium, fill_model). With spread-aware fills disabled this
+    is exactly (ltp, "ltp") so historical behavior is unchanged.
+    """
+    if not fills.spread_aware_fills_enabled:
+        return ltp, "ltp"
+    if metrics.ask is not None and metrics.ask > 0:
+        return round_to_tick(metrics.ask, tick_size), "ask"
+    if metrics.spread is not None and metrics.spread > 0:
+        return round_to_tick(ltp + metrics.spread / Decimal("2"), tick_size), "ltp_plus_half_spread"
+    return ltp, "ltp"
+
+
+def effective_exit_premium(
+    ltp: Decimal,
+    quote_meta: Any,
+    *,
+    fills: FillModelConfig,
+    tick_size: Decimal,
+) -> Decimal:
+    """Sell-side paper fill: bid -> LTP - half spread -> LTP.
+
+    Floored at one tick so a wide spread on a tiny premium never produces a
+    non-positive fill. With spread-aware fills disabled, returns ltp untouched.
+    """
+    if not fills.spread_aware_fills_enabled:
+        return ltp
+    metrics = parse_option_quote_metrics(quote_meta, ltp=ltp)
+    floor = tick_size if tick_size > 0 else Decimal("0.05")
+    if metrics.bid is not None and metrics.bid > 0:
+        return max(round_to_tick(metrics.bid, tick_size), floor)
+    if metrics.spread is not None and metrics.spread > 0:
+        return max(floor_to_tick(ltp - metrics.spread / Decimal("2"), tick_size), floor)
+    return ltp
+
+
+def option_round_trip_costs(
+    entry_premium: Decimal,
+    exit_premium: Decimal,
+    quantity: int,
+    costs: CostModelConfig,
+) -> tuple[Decimal, dict[str, str]]:
+    """Total round-trip transaction costs (INR) for one long-option paper trade.
+
+    Buy side: brokerage flat + exchange txn + stamp duty + SEBI fee.
+    Sell side: brokerage flat + STT on sell premium + exchange txn + SEBI fee.
+    GST applies to brokerage + exchange + SEBI charges.
+    Returns (total, breakdown) with the total quantized to 0.01; (0, {}) when
+    the cost model is disabled.
+    """
+    if not costs.enabled or quantity <= 0:
+        return Decimal("0.00"), {}
+    qty = Decimal(quantity)
+    hundred = Decimal("100")
+    crore = Decimal("10000000")
+    buy_turnover = (entry_premium if entry_premium > 0 else Decimal("0")) * qty
+    sell_turnover = (exit_premium if exit_premium > 0 else Decimal("0")) * qty
+    brokerage = costs.per_order_flat_rupees * Decimal("2")
+    stt = sell_turnover * costs.sell_side_stt_pct / hundred
+    exchange = (buy_turnover + sell_turnover) * costs.exchange_txn_pct / hundred
+    sebi = (buy_turnover + sell_turnover) / crore * costs.sebi_per_crore
+    stamp = buy_turnover * costs.stamp_buy_pct / hundred
+    gst = (brokerage + exchange + sebi) * costs.gst_pct / hundred
+    total = (brokerage + stt + exchange + sebi + stamp + gst).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+    breakdown = {
+        "brokerage": str(brokerage.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)),
+        "stt_sell": str(stt.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)),
+        "exchange_txn": str(exchange.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)),
+        "sebi_fee": str(sebi.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)),
+        "stamp_buy": str(stamp.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)),
+        "gst": str(gst.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)),
+    }
+    return total, breakdown
+
+
+def net_realized_pnl(
+    gross_pnl: Decimal,
+    *,
+    entry_premium: Decimal,
+    exit_premium: Decimal,
+    quantity: int,
+    costs: CostModelConfig,
+) -> tuple[Decimal, Decimal, dict[str, str]]:
+    """Net paper P&L after the round-trip cost stack: (net, total_costs, breakdown)."""
+    total, breakdown = option_round_trip_costs(entry_premium, exit_premium, quantity, costs)
+    net = (gross_pnl - total).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+    return net, total, breakdown
+
+
+def close_paper_trade(
+    cur: "psycopg.Cursor",
+    trade_id: int,
+    *,
+    exit_premium: Decimal,
+    gross_pnl: Decimal,
+    reason: str,
+    entry_premium: Decimal,
+    quantity: int,
+    trade_raw: dict[str, Any],
+    costs: CostModelConfig,
+) -> tuple[Decimal, Decimal]:
+    """Single choke point for every paper-trade close: applies the cost stack,
+    persists net realized P&L, and records the cost breakdown on the trade raw.
+
+    With the cost model disabled this degenerates to the historical UPDATE
+    (net == gross, raw untouched). Returns (net_pnl, total_costs).
+    """
+    net, total_costs, breakdown = net_realized_pnl(
+        gross_pnl,
+        entry_premium=entry_premium,
+        exit_premium=exit_premium,
+        quantity=quantity,
+        costs=costs,
+    )
+    if costs.enabled and total_costs > 0:
+        merged_raw = dict(trade_raw)
+        merged_raw["exit_costs"] = {**breakdown, "total": str(total_costs)}
+        merged_raw["gross_pnl"] = str(gross_pnl)
+        cur.execute(
+            """
+            update research.option_paper_trades
+            set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
+                exit_reason=%s, raw=%s::jsonb, updated_at=now()
+            where option_trade_id=%s
+            """,
+            (exit_premium, net, reason, json_dumps_safe(merged_raw), trade_id),
+        )
+    else:
+        cur.execute(
+            """
+            update research.option_paper_trades
+            set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
+                exit_reason=%s, updated_at=now()
+            where option_trade_id=%s
+            """,
+            (exit_premium, net, reason, trade_id),
+        )
+    return net, total_costs
 
 
 def connect_db() -> psycopg.Connection:
@@ -3052,6 +3266,15 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     if not risk_decision.allowed:
                         rejection_reasons.append(f"{candidate.symbol}: risk filter rejected: {'; '.join(risk_decision.reasons)}")
                         continue
+                # Paper buy-side fill: cross the (allowed) spread instead of
+                # assuming the LTP was achievable. Feeds sizing, stop mapping,
+                # target, and the recorded entry_premium below.
+                entry_fill, entry_fill_model = effective_entry_premium(
+                    option_ltp,
+                    parse_option_quote_metrics(option_meta, ltp=option_ltp),
+                    fills=config.fills,
+                    tick_size=candidate.tick_size,
+                )
                 risk_option_candles = get_recent_candles(
                     cur,
                     candidate.symbol,
@@ -3073,9 +3296,9 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     rejection_reasons.append(f"{candidate.symbol}: pullback structure stop unavailable")
                     continue
                 index_distance = abs(underlying_ltp - structure_stop_level)
-                estimated_stop = floor_to_tick(option_ltp - (index_distance * beta), candidate.tick_size)
+                estimated_stop = floor_to_tick(entry_fill - (index_distance * beta), candidate.tick_size)
                 lots, quantity, premium_value, risk_rupees = size_lots_by_risk(
-                    entry_premium=option_ltp,
+                    entry_premium=entry_fill,
                     estimated_stop_premium=estimated_stop,
                     lot_size=candidate.lot_size,
                     max_trade_loss=config.max_trade_loss,
@@ -3084,25 +3307,29 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                 if lots < 1:
                     rejection_reasons.append(f"{candidate.symbol}: structural risk > {money(config.max_trade_loss)} at 1 lot/exposure cap")
                     continue
-                target = round_to_tick(option_ltp + ((option_ltp - estimated_stop) * config.target_r_multiple), candidate.tick_size)
+                target = round_to_tick(entry_fill + ((entry_fill - estimated_stop) * config.target_r_multiple), candidate.tick_size)
                 risk_plan = RealisticRiskPlan(
                     stop_premium=estimated_stop,
                     target_premium=target,
                     index_stop=structure_stop_level,
-                    risk_points=(option_ltp - estimated_stop).quantize(TWO_PLACES, rounding=ROUND_HALF_UP),
+                    risk_points=(entry_fill - estimated_stop).quantize(TWO_PLACES, rounding=ROUND_HALF_UP),
                     risk_rupees=risk_rupees,
-                    target_points=(target - option_ltp).quantize(TWO_PLACES, rounding=ROUND_HALF_UP),
+                    target_points=(target - entry_fill).quantize(TWO_PLACES, rounding=ROUND_HALF_UP),
                     raw={
                         "basis": "pullback_index_structure_beta_mapped",
                         "index_stop": str(structure_stop_level),
                         "observed_option_index_slope": str(beta),
                         "candidate_rank": "ATM" if is_atm else "OTM1",
+                        "entry_fill_model": entry_fill_model,
+                        "ltp_at_entry": str(option_ltp),
                     },
                 )
                 contract = candidate
                 stop = risk_plan.stop_premium
                 selected_state = {
-                    "option_ltp": option_ltp,
+                    "option_ltp": entry_fill,
+                    "entry_fill_model": entry_fill_model,
+                    "entry_ltp": option_ltp,
                     "option_meta": option_meta,
                     "risk_decision": risk_decision,
                     "risk_plan": risk_plan,
@@ -3122,6 +3349,8 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                     campaign=campaign,
                 )
             option_ltp = selected_state["option_ltp"]
+            entry_fill_model = selected_state["entry_fill_model"]
+            entry_ltp = selected_state["entry_ltp"]
             option_meta = selected_state["option_meta"]
             risk_decision = selected_state["risk_decision"]
             risk_plan = selected_state["risk_plan"]
@@ -3183,6 +3412,7 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
                         "strategy_card": strategy_card_as_raw(strategy_card),
                         "underlying_quote": underlying_meta,
                         "option_quote": option_meta,
+                        "entry_fill": {"model": entry_fill_model, "ltp_at_entry": str(entry_ltp)},
                         "constituent_signal": signal.raw,
                         "vwap_volume_confirmation": (
                             {
@@ -3326,18 +3556,20 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                 target_dec = Decimal(str(target))
                 qty = int(quantity)
                 ltp, quote_meta, stale = get_quote(cur, str(symbol), config.quote_stale_seconds)
+                # Sell-side paper fill: what the position could actually be
+                # sold for (bid / LTP - half spread), used for every exit
+                # evaluation and P&L below. Identical to ltp when disabled.
+                sellable = None if ltp is None else effective_exit_premium(
+                    ltp, quote_meta, fills=config.fills, tick_size=config.option_tick_size)
                 force_request_id = force_exit_claims.get(int(trade_id))
                 if force_request_id is not None:
-                    exit_premium, pnl = evaluate_manual_force_exit(entry_premium=entry_dec, ltp=ltp, quantity=qty)
+                    exit_premium, gross_pnl = evaluate_manual_force_exit(entry_premium=entry_dec, ltp=sellable, quantity=qty)
                     quote_note = " Quote was missing/stale; closed at last stored premium." if (ltp is None or stale) else ""
-                    cur.execute(
-                        """
-                        update research.option_paper_trades
-                        set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
-                            exit_reason='manual_force_exit', updated_at=now()
-                        where option_trade_id=%s
-                        """,
-                        (exit_premium, pnl, trade_id),
+                    pnl, _ = close_paper_trade(
+                        cur, int(trade_id),
+                        exit_premium=exit_premium, gross_pnl=gross_pnl,
+                        reason="manual_force_exit", entry_premium=entry_dec,
+                        quantity=qty, trade_raw=trade_raw, costs=config.costs,
                     )
                     insert_event(
                         cur,
@@ -3354,21 +3586,18 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                     action_lines.append(f"- {symbol}: closed by manual force-exit; exit {money(exit_premium)}; paper P&L {money(pnl)}")
                     continue
                 if ltp is None or stale:
-                    reason, exit_premium, pnl = evaluate_stale_quote_force_exit(
+                    reason, exit_premium, gross_pnl = evaluate_stale_quote_force_exit(
                         entry_premium=entry_dec,
                         quantity=qty,
                         now=now,
                         force_exit_utc=force_exit_utc,
                     )
                     if reason:
-                        cur.execute(
-                            """
-                            update research.option_paper_trades
-                            set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
-                                exit_reason=%s, updated_at=now()
-                            where option_trade_id=%s
-                            """,
-                            (exit_premium, pnl, reason, trade_id),
+                        pnl, _ = close_paper_trade(
+                            cur, int(trade_id),
+                            exit_premium=exit_premium, gross_pnl=gross_pnl,
+                            reason=reason, entry_premium=entry_dec,
+                            quantity=qty, trade_raw=trade_raw, costs=config.costs,
                         )
                         insert_event(
                             cur,
@@ -3446,28 +3675,25 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                         insert_event(cur, int(trade_id), "paper_index_structure_stop_raised", ltp, qty, f"Raised index-structure stop to {trailed_stop} using latest BankNifty swing; no live order.", {"index_stop": str(trailed_stop)})
                         action_lines.append(f"- {symbol}: raised index-structure stop to {trailed_stop} from BankNifty swing")
                         structure_stop = trailed_stop
-                index_reason, index_exit_premium, index_pnl = evaluate_index_structure_exit(
+                index_reason, index_exit_premium, index_gross_pnl = evaluate_index_structure_exit(
                     option_type=str(option_type),
                     index_ltp=None if index_stale else index_ltp,
                     structure_stop=structure_stop,
-                    option_ltp=ltp,
+                    option_ltp=sellable,
                     entry_premium=entry_dec,
                     quantity=qty,
                 )
                 if index_reason:
-                    cur.execute(
-                        """
-                        update research.option_paper_trades
-                        set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
-                            exit_reason=%s, updated_at=now()
-                        where option_trade_id=%s
-                        """,
-                        (index_exit_premium, index_pnl, index_reason, trade_id),
+                    index_pnl, _ = close_paper_trade(
+                        cur, int(trade_id),
+                        exit_premium=index_exit_premium, gross_pnl=index_gross_pnl,
+                        reason=index_reason, entry_premium=entry_dec,
+                        quantity=qty, trade_raw=trade_raw, costs=config.costs,
                     )
                     insert_event(cur, int(trade_id), f"paper_option_closed_{index_reason}", index_exit_premium, qty, f"Closed by BankNifty index-structure stop {structure_stop}; index {index_ltp}; paper P&L {money(index_pnl)}; no live order.", {"index_ltp": None if index_ltp is None else str(index_ltp), "index_stop": None if structure_stop is None else str(structure_stop)})
                     action_lines.append(f"- {symbol}: closed by index-structure stop {structure_stop}; option exit {money(index_exit_premium)}; paper P&L {money(index_pnl)}")
                     continue
-                high_dec = max(Decimal(str(highest or entry)), ltp)
+                high_dec = max(Decimal(str(highest or entry)), sellable)
                 if high_dec != Decimal(str(highest or entry)):
                     cur.execute("update research.option_paper_trades set highest_premium=%s, updated_at=now() where option_trade_id=%s", (high_dec, trade_id))
                 risk_plan_raw = trade_raw.get("realistic_risk_plan") if isinstance(trade_raw.get("realistic_risk_plan"), dict) else {}
@@ -3484,13 +3710,16 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                     ratchet_giveback_pct=config.ratchet_giveback_pct,
                     ratchet_giveback_min_inr=config.ratchet_giveback_min_inr,
                     tick_size=config.option_tick_size,
+                    # Cost-aware breakeven: lock a stop that nets >= 0 after the
+                    # round-trip cost stack, not merely gross-flat.
+                    round_trip_cost_inr=option_round_trip_costs(entry_dec, entry_dec, qty, config.costs)[0],
                 )
                 if ratchet_stop is not None and ratchet_stop > stop_dec:
                     cur.execute("update research.option_paper_trades set stop_premium=%s, updated_at=now() where option_trade_id=%s", (ratchet_stop, trade_id))
                     insert_event(cur, int(trade_id), "paper_option_stop_raised", ratchet_stop, qty, f"Raised paper stop to {money(ratchet_stop)} using R-based MFE ratchet after best observed premium {money(high_dec)}; no live order.")
                     action_lines.append(f"- {symbol}: raised paper stop to {money(ratchet_stop)} using R-based MFE ratchet after best observed premium {money(high_dec)}")
                     stop_dec = ratchet_stop
-                unrealized_now = ((ltp - entry_dec) * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+                unrealized_now = ((sellable - entry_dec) * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
                 reference_level = decimal_or_none(index_structure_raw.get("reference_level"))
                 momentum_gone = False
                 if reference_level is not None and index_ltp is not None and not index_stale:
@@ -3505,20 +3734,17 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                     momentum_gone=momentum_gone,
                 )
                 if stagnation_reason:
-                    cur.execute(
-                        """
-                        update research.option_paper_trades
-                        set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
-                            exit_reason=%s, updated_at=now()
-                        where option_trade_id=%s
-                        """,
-                        (ltp, unrealized_now, stagnation_reason, trade_id),
+                    stagnation_pnl, _ = close_paper_trade(
+                        cur, int(trade_id),
+                        exit_premium=sellable, gross_pnl=unrealized_now,
+                        reason=stagnation_reason, entry_premium=entry_dec,
+                        quantity=qty, trade_raw=trade_raw, costs=config.costs,
                     )
-                    insert_event(cur, int(trade_id), f"paper_option_closed_{stagnation_reason}", ltp, qty, f"Closed by stagnation rule after {config.stagnation_minutes}m; paper P&L {money(unrealized_now)}; no live order.")
-                    action_lines.append(f"- {symbol}: closed by stagnation rule; exit {money(ltp)}; paper P&L {money(unrealized_now)}")
+                    insert_event(cur, int(trade_id), f"paper_option_closed_{stagnation_reason}", sellable, qty, f"Closed by stagnation rule after {config.stagnation_minutes}m; paper P&L {money(stagnation_pnl)}; no live order.")
+                    action_lines.append(f"- {symbol}: closed by stagnation rule; exit {money(sellable)}; paper P&L {money(stagnation_pnl)}")
                     continue
-                reason, exit_premium, pnl = evaluate_option_exit(
-                    ltp,
+                reason, exit_premium, gross_pnl = evaluate_option_exit(
+                    sellable,
                     entry_dec,
                     stop_dec,
                     target_dec,
@@ -3533,22 +3759,19 @@ def monitor_open_options(config: CampaignConfig, *, refresh: bool = False, quiet
                     target_exit_enabled=config.fixed_target_exit_enabled,
                 )
                 if reason:
-                    cur.execute(
-                        """
-                        update research.option_paper_trades
-                        set status='closed', exit_premium=%s, exit_time=now(), realized_pnl=%s,
-                            exit_reason=%s, updated_at=now()
-                        where option_trade_id=%s
-                        """,
-                        (exit_premium, pnl, reason, trade_id),
+                    pnl, _ = close_paper_trade(
+                        cur, int(trade_id),
+                        exit_premium=exit_premium, gross_pnl=gross_pnl,
+                        reason=reason, entry_premium=entry_dec,
+                        quantity=qty, trade_raw=trade_raw, costs=config.costs,
                     )
                     insert_event(cur, int(trade_id), f"paper_option_closed_{reason}", exit_premium, qty, f"Closed by {reason}; paper P&L {money(pnl)}; no live order.")
                     action_lines.append(f"- {symbol}: closed by {reason}; exit {money(exit_premium)}; paper P&L {money(pnl)}")
                 else:
-                    unrealized = ((ltp - entry_dec) * qty).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+                    unrealized = ((sellable - entry_dec) * qty).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
                     index_sl_text = f"; index SL {structure_stop}" if structure_stop is not None else ""
                     target_text = money(target_dec) if config.fixed_target_exit_enabled else "disabled — trailing runner active"
-                    unchanged.append(f"- {symbol}: open {option_type}; LTP {money(ltp)}; paper P&L {money(unrealized)}; option safety SL {money(stop_dec)}; target {target_text}{index_sl_text}")
+                    unchanged.append(f"- {symbol}: open {option_type}; LTP {money(ltp)}; sellable {money(sellable)}; paper P&L {money(unrealized)}; option safety SL {money(stop_dec)}; target {target_text}{index_sl_text}")
     if action_lines:
         return header + action_lines + ([] if quiet_no_change else [""] + unchanged)
     return [] if quiet_no_change else header + unchanged

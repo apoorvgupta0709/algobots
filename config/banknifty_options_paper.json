@@ -27,6 +27,20 @@
   "chain_selection_enabled": false,
   "paper_only": true,
   "live_orders_enabled": false,
+  "fills": {
+    "spread_aware_fills_enabled": true,
+    "notes": "Paper entries fill at ask (or LTP + half spread), exits at bid (or LTP - half spread), instead of assuming LTP on both sides of an allowed-up-to-3% spread. Set false to restore legacy LTP fills."
+  },
+  "costs": {
+    "enabled": true,
+    "per_order_flat_rupees": 20,
+    "sell_side_stt_pct": 0.10,
+    "exchange_txn_pct": 0.03503,
+    "sebi_per_crore": 10,
+    "stamp_buy_pct": 0.003,
+    "gst_pct": 18,
+    "notes": "NSE long-option round-trip cost stack deducted from realized_pnl (brokerage flat/order, STT 0.10% on sell premium, NSE txn 0.03503%, SEBI Rs10/crore, stamp 0.003% buy side, 18% GST on brokerage+exchange+SEBI). Set enabled false to restore gross P&L."
+  },
   "notes": "BankNifty Constituent-Led Pullback Continuation v2. Paper-only deterministic 5m entry / 15s monitor. Entry waits for constituent-led regime, confluence breakout leg, valid pullback/retest hold, then trigger candle continuation. Fixed targets disabled; exits use index structural SL, premium hard SL, R-based breakeven/MFE ratchet tuned to lock MFE - max(\u20b9300, 30% of MFE) from 1.0R, stagnation exit, and 15:20 force exit. No live FYERS orders.",
   "min_index_confirmation_pct": 0.05,
   "min_constituent_coverage_pct": 70,

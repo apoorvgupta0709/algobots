@@ -1957,3 +1957,133 @@ def test_candle_coverage_report_lists_covered_and_missing(monkeypatch) -> None:
     assert "- ICICIBANK (NSE:ICICIBANK-EQ): ok" in joined
     assert "- AUBANK (NSE:AUBANK-EQ): MISSING" in joined
     assert "Missing today's 5-minute candles: NSE:AUBANK-EQ" in joined
+
+
+# --------------------------------------------------------------------------- #
+# Spread-aware paper fills + round-trip cost stack (fills / costs config)
+# --------------------------------------------------------------------------- #
+def _fills(enabled: bool) -> bn.FillModelConfig:
+    return bn.FillModelConfig(spread_aware_fills_enabled=enabled)
+
+
+def _costs(enabled: bool = True) -> bn.CostModelConfig:
+    return bn.CostModelConfig(
+        enabled=enabled,
+        per_order_flat_rupees=Decimal("20"),
+        sell_side_stt_pct=Decimal("0.10"),
+        exchange_txn_pct=Decimal("0.03503"),
+        sebi_per_crore=Decimal("10"),
+        stamp_buy_pct=Decimal("0.003"),
+        gst_pct=Decimal("18"),
+    )
+
+
+def test_fill_and_cost_configs_default_disabled():
+    cfg = bn.parse_fill_model_config(None)
+    assert cfg.spread_aware_fills_enabled is False
+    costs = bn.parse_cost_model_config(None)
+    assert costs.enabled is False
+    assert costs.per_order_flat_rupees == Decimal("0")
+
+
+def test_cost_config_rejects_negative_rates():
+    with pytest.raises(SystemExit):
+        bn.parse_cost_model_config({"enabled": True, "per_order_flat_rupees": -1})
+
+
+def test_effective_entry_premium_disabled_is_ltp():
+    metrics = bn.parse_option_quote_metrics({"bid": "99", "ask": "101"}, ltp=Decimal("100"))
+    premium, model = bn.effective_entry_premium(
+        Decimal("100"), metrics, fills=_fills(False), tick_size=Decimal("0.05"))
+    assert premium == Decimal("100")
+    assert model == "ltp"
+
+
+def test_effective_entry_premium_uses_ask():
+    metrics = bn.parse_option_quote_metrics({"bid": "99.10", "ask": "100.90"}, ltp=Decimal("100"))
+    premium, model = bn.effective_entry_premium(
+        Decimal("100"), metrics, fills=_fills(True), tick_size=Decimal("0.05"))
+    assert premium == Decimal("100.90")
+    assert model == "ask"
+
+
+def test_effective_entry_premium_falls_back_to_half_spread():
+    metrics = bn.parse_option_quote_metrics({"spread": "2.00"}, ltp=Decimal("100"))
+    premium, model = bn.effective_entry_premium(
+        Decimal("100"), metrics, fills=_fills(True), tick_size=Decimal("0.05"))
+    assert premium == Decimal("101.00")
+    assert model == "ltp_plus_half_spread"
+
+
+def test_effective_entry_premium_no_spread_data_is_ltp():
+    metrics = bn.parse_option_quote_metrics({}, ltp=Decimal("100"))
+    premium, model = bn.effective_entry_premium(
+        Decimal("100"), metrics, fills=_fills(True), tick_size=Decimal("0.05"))
+    assert premium == Decimal("100")
+    assert model == "ltp"
+
+
+def test_effective_exit_premium_uses_bid():
+    exit_premium = bn.effective_exit_premium(
+        Decimal("100"), {"bid": "99.10", "ask": "100.90"},
+        fills=_fills(True), tick_size=Decimal("0.05"))
+    assert exit_premium == Decimal("99.10")
+
+
+def test_effective_exit_premium_half_spread_fallback_and_tick_floor():
+    exit_premium = bn.effective_exit_premium(
+        Decimal("100"), {"spread": "2.00"},
+        fills=_fills(True), tick_size=Decimal("0.05"))
+    assert exit_premium == Decimal("99.00")
+    # A wide spread on a tiny premium can never produce a fill below one tick.
+    tiny = bn.effective_exit_premium(
+        Decimal("0.30"), {"spread": "4.00"},
+        fills=_fills(True), tick_size=Decimal("0.05"))
+    assert tiny == Decimal("0.05")
+
+
+def test_effective_exit_premium_disabled_is_ltp():
+    assert bn.effective_exit_premium(
+        Decimal("100"), {"bid": "99"}, fills=_fills(False),
+        tick_size=Decimal("0.05")) == Decimal("100")
+
+
+def test_option_round_trip_costs_hand_computed():
+    # entry 100, exit 110, qty 30 -> buy turnover 3000, sell turnover 3300.
+    # brokerage 40; STT 0.10% * 3300 = 3.30; exchange 0.03503% * 6300 = 2.206...;
+    # SEBI 6300/1e7*10 = 0.0063; stamp 0.003% * 3000 = 0.09;
+    # GST 18% * (40 + 2.20689 + 0.0063) = 7.598...
+    total, breakdown = bn.option_round_trip_costs(
+        Decimal("100"), Decimal("110"), 30, _costs())
+    assert breakdown["brokerage"] == "40.00"
+    assert breakdown["stt_sell"] == "3.30"
+    assert breakdown["exchange_txn"] == "2.21"
+    assert breakdown["stamp_buy"] == "0.09"
+    assert total == Decimal("53.20")
+
+
+def test_option_round_trip_costs_disabled_is_zero():
+    total, breakdown = bn.option_round_trip_costs(
+        Decimal("100"), Decimal("110"), 30, _costs(enabled=False))
+    assert total == Decimal("0.00")
+    assert breakdown == {}
+
+
+def test_net_realized_pnl_subtracts_costs():
+    gross = Decimal("300.00")  # (110-100)*30
+    net, total, breakdown = bn.net_realized_pnl(
+        gross, entry_premium=Decimal("100"), exit_premium=Decimal("110"),
+        quantity=30, costs=_costs())
+    assert total == Decimal("53.20")
+    assert net == Decimal("246.80")
+    assert "gst" in breakdown
+
+
+def test_net_realized_pnl_costs_disabled_is_gross():
+    gross = Decimal("300.00")
+    net, total, breakdown = bn.net_realized_pnl(
+        gross, entry_premium=Decimal("100"), exit_premium=Decimal("110"),
+        quantity=30, costs=_costs(enabled=False))
+    assert net == gross
+    assert total == Decimal("0.00")
+    assert breakdown == {}
