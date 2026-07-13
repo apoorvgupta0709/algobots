@@ -297,6 +297,7 @@ def simulate_trade(
     daily_realized: Decimal,
     round_trip_cost: Decimal = TRADE_COST_RUPEES,
     cost_aware_breakeven: bool = True,
+    tp_index_level: Decimal | None = None,
 ) -> Trade | None:
     entry = entry_candle.open
     index_distance = abs(entry - index_stop)
@@ -328,6 +329,19 @@ def simulate_trade(
     tracking = [c for c in minute_rows if c.ts >= entry_candle.ts]
     if not tracking:
         return None
+    if tp_index_level is not None:
+        tp_pnl = signed * (tp_index_level - entry) * beta * Decimal(qty)
+        # Guard 1: TP must be strictly beyond entry in the favourable direction.
+        zero_distance = (
+            (direction == "CE" and tp_index_level <= entry) or
+            (direction == "PE" and tp_index_level >= entry)
+        )
+        # Guard 2: Net P&L (after round-trip cost) must meet the min-R threshold.
+        # Compare gross vs net: if the user configures tp_min_r=1.0 they expect
+        # at least 1.0R *realised*, so we deduct costs before the comparison.
+        tp_net = tp_pnl - round_trip_cost
+        if zero_distance or tp_net <= 0 or tp_net < risk_rupees * config.measured_move_tp_min_r:
+            tp_index_level = None
     for i, c in enumerate(tracking):
         local_time = c.ts.astimezone(IST).time()
         move_close = signed * (c.close - entry)
@@ -341,6 +355,17 @@ def simulate_trade(
             pnl = -risk_rupees
             exit_ts, exit_index, exit_reason = c.ts, index_stop, "index_structure_stop"
             break
+        # Update best P&L BEFORE testing exits, so stops, TP, and ratchet
+        # all record the MFE for this bar.  Order: favourable extreme first,
+        # then exits in stop-before-TP-before-ratchet priority.
+        favorable = signed * ((c.high if direction == "CE" else c.low) - entry)
+        best_pnl = max(best_pnl, (favorable * beta * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP))
+        if tp_index_level is not None:
+            hit = c.high >= tp_index_level if direction == "CE" else c.low <= tp_index_level
+            if hit:
+                pnl = (signed * (tp_index_level - entry) * beta * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+                exit_ts, exit_index, exit_reason = c.ts, tp_index_level, "measured_move_tp"
+                break
         # Test against the lock built from PRIOR candles only — raising the lock
         # from this candle's high and then filling at this candle's close assumes
         # an intrabar high-before-close ordering that favors the strategy.
@@ -348,8 +373,6 @@ def simulate_trade(
             pnl = lock
             exit_ts, exit_index, exit_reason = c.ts, c.close, "mfe_ratchet_stop"
             break
-        favorable = signed * ((c.high if direction == "CE" else c.low) - entry)
-        best_pnl = max(best_pnl, (favorable * beta * Decimal(qty)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP))
         # Reuse configured ratchet math by mapping rupee pnl to a fake premium path.
         fake_entry = Decimal("100")
         fake_high = fake_entry + (best_pnl / Decimal(qty))
@@ -501,6 +524,13 @@ def run_backtest(
             entry = next_minute_open(minute_rows, c.ts + timedelta(minutes=5))
             if entry is None:
                 continue
+            tp_level = None
+            if config.measured_move_tp_enabled:
+                raw = pb.raw
+                if raw.get("pullback_extreme") and raw.get("leg_height"):
+                    origin = Decimal(raw["pullback_extreme"])
+                    height = Decimal(raw["leg_height"]) * config.measured_move_tp_fraction
+                    tp_level = (origin + height if direction == "CE" else origin - height).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
             trade = None
             for rank, beta in (("ATM", config.beta_fallback_atm), ("OTM1", config.beta_fallback_otm1)):
                 trade = simulate_trade(
@@ -517,6 +547,7 @@ def run_backtest(
                     daily_realized=daily_realized,
                     round_trip_cost=round_trip_cost,
                     cost_aware_breakeven=cost_aware_breakeven,
+                    tp_index_level=tp_level,
                 )
                 if trade is not None:
                     break
@@ -546,6 +577,9 @@ def run_backtest(
             "ratchet_giveback_min_inr": str(config.ratchet_giveback_min_inr),
             "round_trip_cost_inr": str(round_trip_cost),
             "cost_aware_breakeven": cost_aware_breakeven,
+            "measured_move_tp_enabled": config.measured_move_tp_enabled,
+            "measured_move_tp_fraction": str(config.measured_move_tp_fraction),
+            "measured_move_tp_min_r": str(config.measured_move_tp_min_r),
         },
     }
     return trades, meta
@@ -685,6 +719,8 @@ def validate_experimental_inputs(
     ratchet_giveback_pct: Decimal | None,
     ratchet_giveback_min_inr: Decimal | None,
     round_trip_cost: Decimal,
+    tp_fraction: Decimal | None = None,
+    tp_min_r: Decimal | None = None,
 ) -> None:
     """Reject non-sensible experimental exit-sweep inputs before backtests run."""
     if round_trip_cost < 0:
@@ -700,6 +736,10 @@ def validate_experimental_inputs(
         raise SystemExit("Refusing: --ratchet-giveback-pct must be > 0 when provided")
     if ratchet_giveback_min_inr is not None and ratchet_giveback_min_inr < 0:
         raise SystemExit("Refusing: --ratchet-giveback-min-inr must be >= 0 when provided")
+    if tp_fraction is not None and tp_fraction <= 0:
+        raise SystemExit("Refusing: --tp-fraction must be > 0 (a negative or zero fraction would reverse or nullify the measured-move target)")
+    if tp_min_r is not None and tp_min_r < 0:
+        raise SystemExit("Refusing: --tp-min-r must be >= 0")
 
 
 def main() -> None:
@@ -716,6 +756,10 @@ def main() -> None:
     parser.add_argument("--ratchet-giveback-min-inr", type=Decimal, default=None, help="Experimental: override exits.ratchet_giveback_min_inr")
     parser.add_argument("--round-trip-cost", type=Decimal, default=TRADE_COST_RUPEES, help=f"Round-trip cost per trade in INR (default {TRADE_COST_RUPEES})")
     parser.add_argument("--legacy-gross-breakeven", action="store_true", help="Disable cost-aware breakeven (lock gross-flat, the pre-fix behavior)")
+    parser.add_argument("--measured-move-tp", action="store_true", default=None, help="Enable measured-move take-profit (EXPERIMENTAL)")
+    parser.add_argument("--no-measured-move-tp", action="store_true", default=None, help="Disable config-enabled measured-move take-profit")
+    parser.add_argument("--tp-fraction", type=Decimal, default=None, help="Measured-move TP fraction of leg height (default: config)")
+    parser.add_argument("--tp-min-r", type=Decimal, default=None, help="Minimum R-multiple guard for TP (default: config)")
     args = parser.parse_args()
     config = load_config(args.config)
     if not config.paper_only or config.live_orders_enabled:
@@ -727,6 +771,8 @@ def main() -> None:
         ratchet_giveback_pct=args.ratchet_giveback_pct,
         ratchet_giveback_min_inr=args.ratchet_giveback_min_inr,
         round_trip_cost=args.round_trip_cost,
+        tp_fraction=args.tp_fraction,
+        tp_min_r=args.tp_min_r,
     )
 
     overrides: dict[str, Decimal] = {}
@@ -738,6 +784,20 @@ def main() -> None:
         overrides["ratchet_giveback_pct"] = args.ratchet_giveback_pct
     if args.ratchet_giveback_min_inr is not None:
         overrides["ratchet_giveback_min_inr"] = args.ratchet_giveback_min_inr
+    # Measured-move TP: apply each CLI override independently.
+    # --measured-move-tp enables; --no-measured-move-tp disables.
+    # --tp-fraction / --tp-min-r override individual config values without
+    # affecting the enable flag.
+    if args.measured_move_tp and args.no_measured_move_tp:
+        raise SystemExit("Refusing: --measured-move-tp and --no-measured-move-tp are mutually exclusive.")
+    if args.no_measured_move_tp:
+        overrides["measured_move_tp_enabled"] = Decimal("0")
+    elif args.measured_move_tp:
+        overrides["measured_move_tp_enabled"] = Decimal("1")
+    if args.tp_fraction is not None:
+        overrides["measured_move_tp_fraction"] = args.tp_fraction
+    if args.tp_min_r is not None:
+        overrides["measured_move_tp_min_r"] = args.tp_min_r
     if overrides:
         config = replace(config, **overrides)
     cost_aware = not args.legacy_gross_breakeven

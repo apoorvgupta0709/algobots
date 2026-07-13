@@ -305,6 +305,9 @@ class CampaignConfig:
     ratchet_giveback_min_inr: Decimal
     stagnation_minutes: int
     stagnation_min_r: Decimal
+    measured_move_tp_enabled: bool
+    measured_move_tp_fraction: Decimal
+    measured_move_tp_min_r: Decimal
     constituents: tuple[BankNiftyConstituent, ...]
     no_new_trades_after: dtime
     force_exit_time: dtime
@@ -314,6 +317,8 @@ class CampaignConfig:
     quote_stale_seconds: int
     chain_stale_seconds: int
     chain_selection_enabled: bool
+    quote_stale_alert_consecutive: int
+    quote_stale_alert_repeat_every: int
     paper_only: bool
     live_orders_enabled: bool
     notes: str
@@ -1002,6 +1007,14 @@ def load_config(path: Path = DEFAULT_CONFIG) -> CampaignConfig:
                 f"disagrees with the enforced top-level value ({top_value})."
             )
 
+    measured_move_tp_enabled = bool_from_config(config_get(data, "exits.measured_move_tp_enabled", None), default=False)
+    measured_move_tp_fraction = Decimal(str(config_get(data, "exits.measured_move_tp_fraction", 1.0)))
+    measured_move_tp_min_r = Decimal(str(config_get(data, "exits.measured_move_tp_min_r", 1.0)))
+    if measured_move_tp_fraction <= 0:
+        raise ValueError(f"exits.measured_move_tp_fraction must be > 0, got {measured_move_tp_fraction}.")
+    if measured_move_tp_min_r < 0:
+        raise ValueError(f"exits.measured_move_tp_min_r must be >= 0, got {measured_move_tp_min_r}.")
+
     return CampaignConfig(
         campaign_name=str(data.get("campaign_name", "banknifty_options_paper_50000_2026-06-08")),
         strategy_version=str(data.get("strategy_version", "banknifty_options_paper_v1")),
@@ -1061,6 +1074,9 @@ def load_config(path: Path = DEFAULT_CONFIG) -> CampaignConfig:
         ratchet_giveback_min_inr=Decimal(str(config_get(data, "exits.ratchet_giveback_min_inr", 600))),
         stagnation_minutes=int(config_get(data, "exits.stagnation_minutes", 30)),
         stagnation_min_r=Decimal(str(config_get(data, "exits.stagnation_min_r", 0.3))),
+        measured_move_tp_enabled=measured_move_tp_enabled,
+        measured_move_tp_fraction=measured_move_tp_fraction,
+        measured_move_tp_min_r=measured_move_tp_min_r,
         constituents=parse_constituents(data.get("constituents")),
         no_new_trades_after=parse_time(str(data.get("no_new_trades_after", "14:45"))),
         force_exit_time=parse_time(str(data.get("force_exit_time", "15:20"))),
@@ -1070,6 +1086,8 @@ def load_config(path: Path = DEFAULT_CONFIG) -> CampaignConfig:
         quote_stale_seconds=int(data.get("quote_stale_seconds", 90)),
         chain_stale_seconds=int(data.get("chain_stale_seconds", 180)),
         chain_selection_enabled=bool_from_config(data.get("chain_selection_enabled"), default=False),
+        quote_stale_alert_consecutive=int(config_get(data, "alerts.quote_stale_consecutive_alert", 3)),
+        quote_stale_alert_repeat_every=int(config_get(data, "alerts.quote_stale_alert_repeat_every", 3)),
         paper_only=True,
         live_orders_enabled=False,
         notes=str(data.get("notes", "BankNifty options paper campaign; no live orders.")),
@@ -1756,12 +1774,19 @@ def apply_migrations() -> None:
 def refresh_quotes(symbols: list[str]) -> None:
     if not symbols:
         return
+    data_source = os.getenv("BN_DATA_SOURCE", "fyers").lower()
+    if data_source == "dhan":
+        script = "ingest_dhan_quotes.py"
+        extra_env: dict[str, str] = {}
+    else:
+        script = "ingest_fyers_quotes.py"
+        extra_env = {"FYERS_LOG_PATH": "/tmp/"}
     # Read-only quote ingestion. The called script writes market.quotes only.
     subprocess.run(
-        [sys.executable, str(PROJECT_ROOT / "scripts" / "ingest_fyers_quotes.py"), "--symbols", *symbols],
+        [sys.executable, str(PROJECT_ROOT / "scripts" / script), "--symbols", *symbols],
         cwd=str(PROJECT_ROOT),
         check=True,
-        env={**os.environ, "FYERS_LOG_PATH": "/tmp/"},
+        env={**os.environ, **extra_env},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -2174,6 +2199,37 @@ def should_run_entry_scan(now: datetime, interval_minutes: int) -> bool:
         return True
     local_now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
     return local_now.minute % interval_minutes == 0
+
+
+def count_recent_quote_stale(cur: psycopg.Cursor, campaign: Campaign, trade_date: date) -> int:
+    """Return the current streak of consecutive ``quote_stale`` entry-scan decisions.
+
+    The per-minute cron restarts a fresh process every tick, so the audit table
+    ``research.option_paper_no_entry_decisions`` is the only state that survives
+    between them. Count back from the most recent decision, ignoring off-boundary
+    ``entry_scan_interval_wait`` noise (those are not quote checks), and stop at
+    the first non-``quote_stale`` blocker (a fresh quote would have produced a
+    different blocker / an entry, which resets the streak). Read-only SELECT on an
+    existing append-only table; never touches the order path.
+    """
+    cur.execute(
+        """
+        select blocker
+        from research.option_paper_no_entry_decisions
+        where campaign_id = %s and trade_date = %s
+          and blocker <> 'entry_scan_interval_wait'
+        order by decision_time desc
+        limit 50
+        """,
+        (campaign.campaign_id, trade_date),
+    )
+    streak = 0
+    for (blocker,) in cur.fetchall():
+        if blocker == "quote_stale":
+            streak += 1
+        else:
+            break
+    return streak
 
 
 def has_open_option_trade(config: CampaignConfig) -> bool:
@@ -2668,10 +2724,25 @@ def evaluate_pullback_continuation(
                 if bullish:
                     pullback_extreme = min(candle_decimal(c, "low") for c in pullback)
                     stop = (pullback_extreme * (Decimal("1") - structure_stop_buffer_pct / Decimal("100"))).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+                    swing_high = candle_decimal(leg, "high")
+                    swing_low = min(candle_decimal(c, "low") for c in prior[-leg_lookback_candles:])
+                    leg_height = swing_high - swing_low
+                    measured_move_target = (pullback_extreme + leg_height).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+                    tp_meta = {"swing_low": str(swing_low), "swing_high": str(swing_high),
+                               "pullback_extreme": str(pullback_extreme), "leg_height": str(leg_height),
+                               "measured_move_target": str(measured_move_target)} if leg_height > 0 else {}
                 else:
                     pullback_extreme = max(candle_decimal(c, "high") for c in pullback)
                     stop = (pullback_extreme * (Decimal("1") + structure_stop_buffer_pct / Decimal("100"))).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
-                return IndexStructureSignal(True, f"Pullback continuation confirmed: retest held broken level {level} and trigger resumed.", stop, level, {"leg_index": leg_idx, "pullback_candles": len(pullback)})
+                    swing_low = candle_decimal(leg, "low")
+                    swing_high = max(candle_decimal(c, "high") for c in prior[-leg_lookback_candles:])
+                    leg_height = swing_high - swing_low
+                    measured_move_target = (pullback_extreme - leg_height).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+                    tp_meta = {"swing_low": str(swing_low), "swing_high": str(swing_high),
+                               "pullback_extreme": str(pullback_extreme), "leg_height": str(leg_height),
+                               "measured_move_target": str(measured_move_target)} if leg_height > 0 else {}
+                raw = {"leg_index": leg_idx, "pullback_candles": len(pullback), **tp_meta}
+                return IndexStructureSignal(True, f"Pullback continuation confirmed: retest held broken level {level} and trigger resumed.", stop, level, raw)
     return IndexStructureSignal(False, "No trade: no valid pullback/retest continuation after a confluence breakout.", None, None, {})
 
 
@@ -2999,12 +3070,30 @@ def scan_for_entry(config: CampaignConfig, *, refresh: bool = False, quiet_no_ch
             underlying_ltp, underlying_meta, stale = get_quote(cur, config.underlying_symbol, config.quote_stale_seconds)
             if underlying_ltp is None or stale:
                 message = f"BankNifty quote missing/stale for {config.underlying_symbol}; token/quote refresh needed."
-                return no_trade(
+                silenced = no_trade(
                     "quote_stale",
                     [message],
                     metrics={**count_metrics, "underlying_symbol": config.underlying_symbol, "quote_stale": True, "underlying_ltp": str(underlying_ltp) if underlying_ltp is not None else None},
                     campaign=campaign,
                 )
+                # Persistent stale quotes almost always mean the FYERS token expired
+                # mid-session. The audit row just written is the cross-process state,
+                # so read back the consecutive-stale streak and, once it crosses the
+                # configured threshold, emit a throttled non-silenced stdout alert so
+                # --quiet-no-change can no longer hide the outage. Paper only; this
+                # never touches the order path.
+                streak = count_recent_quote_stale(cur, campaign, now_local.date())
+                threshold = config.quote_stale_alert_consecutive
+                repeat_every = max(config.quote_stale_alert_repeat_every, 1)
+                if threshold > 0 and streak >= threshold and (streak - threshold) % repeat_every == 0:
+                    alert = (
+                        f"QUOTE_STALE_ALERT: {streak} consecutive stale-quote entry scans for "
+                        f"{config.underlying_symbol} (~{streak * config.entry_scan_interval_minutes} min). "
+                        f"FYERS token likely expired — run scripts/fyers_token_premarket_check.sh / refresh token. "
+                        f"Paper only; no orders affected."
+                    )
+                    return lines + [message, alert]
+                return silenced
             moves, missing = get_constituent_moves(cur, config.constituents, config.quote_stale_seconds)
             signal = evaluate_constituent_led_direction(
                 underlying_ltp=underlying_ltp,
@@ -4011,6 +4100,31 @@ def tick(config: CampaignConfig, *, refresh: bool = True, quiet_no_change: bool 
         config.open_position_update_interval_minutes,
     )
     if not open_trade_exists:
+        # Record the true entry-window blocker (before/after window) on every tick
+        # regardless of the 5-minute scan boundary, so the audit trail reflects why
+        # no entry was attempted instead of masking a post-cutoff tick as an
+        # off-boundary wait. Pure IST time comparison against the same config times
+        # scan_for_entry() uses, so the two paths can't disagree. Logging/labeling
+        # only — no entry decision, order path, or money math changes.
+        now_t = tick_started_ist.timetz().replace(tzinfo=None)
+        if now_t < config.no_new_trades_before.replace(tzinfo=None):
+            record_no_entry_decision(
+                config,
+                mode="tick",
+                blocker="before_window",
+                reason=f"No new trades before {config.no_new_trades_before.strftime('%H:%M')} IST; ORB must form first.",
+                metrics={"tick_time": tick_started_ist.strftime("%H:%M:%S")},
+            )
+            return emitted
+        if now_t >= config.no_new_trades_after.replace(tzinfo=None):
+            record_no_entry_decision(
+                config,
+                mode="tick",
+                blocker="after_window",
+                reason=f"No new trades after {config.no_new_trades_after.strftime('%H:%M')} IST.",
+                metrics={"tick_time": tick_started_ist.strftime("%H:%M:%S")},
+            )
+            return emitted
         if not should_run_entry_scan(tick_started_ist, config.entry_scan_interval_minutes):
             # Off the entry-scan minute boundary: persist a best-effort audit row so
             # the daily report can account for every no-entry tick, then stay silent
